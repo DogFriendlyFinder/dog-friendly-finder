@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Search, Star, Users, Zap } from "lucide-react";
 
@@ -92,7 +92,7 @@ export default function Home() {
             Development Status
           </h2>
           <p className="text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-            Built with 5 Day Sprint Framework by Omar Choudhry - Ready for James's vision. 
+            Built with 5 Day Sprint Framework by Omar Choudhry - Ready for James&apos;s vision. 
             Complete shadcn/ui ecosystem installed with responsive design and accessibility features.
           </p>
           

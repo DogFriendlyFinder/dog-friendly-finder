@@ -17,12 +17,7 @@ import {
   Phone, 
   Globe, 
   Dog, 
-  Coffee,
-  Utensils,
-  Trees,
-  Building,
   Search,
-  Filter,
   Heart,
   Share2,
   Info
@@ -272,7 +267,7 @@ export default function ApplicationDemo() {
           </h3>
           <p className="text-blue-700 dark:text-blue-300 max-w-2xl mx-auto">
             This starter kit demonstrates the Dog Friendly Finder interface with mock data. 
-            Use the "Install Feature" hover cards to get Claude Code prompts for adding real functionality.
+            Use the &ldquo;Install Feature&rdquo; hover cards to get Claude Code prompts for adding real functionality.
           </p>
         </div>
       </div>

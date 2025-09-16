@@ -33,7 +33,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   ArrowLeft,
-  Bell,
   Settings,
   User,
   Palette,
@@ -43,23 +42,19 @@ import {
   Smartphone,
   Monitor,
   Sun,
-  Moon,
   Star,
   Heart,
   Share2,
   Download,
   ExternalLink,
-  Info,
   CheckCircle2,
-  AlertCircle,
-  Lightbulb,
   Sparkles
 } from "lucide-react";
 
 export default function Dashboard() {
   const [sliderValue, setSliderValue] = useState([50]);
   const [switchEnabled, setSwitchEnabled] = useState(false);
-  const [progress, setProgress] = useState(75);
+  const [progress] = useState(75);
 
   return (
     <TooltipProvider>
