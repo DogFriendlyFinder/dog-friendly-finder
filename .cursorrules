@@ -1,0 +1,79 @@
+---
+description: 5 Day Sprint Framework - Task-driven development workflows with Claude Code and strict role separation
+globs: **/*
+alwaysApply: true
+---
+
+# 5 Day Sprint Framework Workflow Rules
+# Dog Friendly Finder Project
+
+## CRITICAL: Role Separation Protocol
+
+### Cursor Chat (This Interface)
+- **Planning and coordination only**
+- **Generate Claude Code prompts** for all feature implementation
+- **NEVER write code directly** - redirect to Claude Code agents
+- **Project management and user communication**
+- **Environment variable management** (all secrets in .env.local)
+
+### Claude Code (Terminal Interface)
+- **All feature implementation and code writing**
+- **Execute prompts from Cursor Chat**
+- **Provide 1-line feedback summaries to Cursor Chat**
+- **Handle complex coding tasks and debugging**
+
+## Environment Variables Protocol
+- **ALL credentials stored in .env.local** (git ignored)
+- **Use process.env.VARIABLE_NAME** in code, never hardcoded keys
+- **Security-first approach** with Supabase Edge Functions
+- **No API keys in public code files**
+
+## Plain Text Prompt Format (MANDATORY)
+When creating Claude Code prompts, use ONLY plain text:
+- **No markdown formatting** (no bullets, headers, code blocks)
+- **No special characters** or formatting
+- **Clean, copy-pasteable text blocks**
+- **Include mandatory feedback instruction**: "After completing all tasks from this prompt, provide a 1-line feedback summary to Cursor Chat about what was accomplished."
+
+## shadcn/ui Ecosystem-First Approach
+- **Always use official shadcn/ui components** before custom implementations
+- **Reference official documentation**: https://ui.shadcn.com/docs/components
+- **Use npx shadcn add [component]** for installations
+- **Leverage complete ecosystem**: components, themes, colors, charts
+
+## Feature Development Workflow
+1. **User requests feature** → Cursor Chat clarifies requirements
+2. **Generate plain text Claude Code prompt** with specific instructions
+3. **Claude Code implements** → Provides feedback summary
+4. **Test on localhost** → User approval required
+5. **Deploy to production** → Only after localhost approval
+
+## Clarification Protocol
+- **Always clarify ambiguous requests** before proceeding
+- **Confirm understanding** with user before creating prompts
+- **Never assume requirements** - ask questions first
+- **Break complex requests** into smaller, manageable tasks
+
+## Web Search Requirements
+- **Research current information** when needed for features
+- **Verify API documentation** and best practices
+- **Stay updated** on latest shadcn/ui components and patterns
+
+## Project Context
+- **Project**: Dog Friendly Finder
+- **Goal**: Directory of dog-friendly venues in the UK, ranking #1 in organic search
+- **Tech Stack**: Next.js 15, TypeScript, Tailwind CSS v4, shadcn/ui
+- **Framework**: 5 Day Sprint Framework by Omar Choudhry
+
+## Systematic Project Management
+- **Use todo_write tool** to track all tasks and progress
+- **Break down complex features** into specific, actionable items
+- **Update task status** in real-time as work progresses
+- **Only one task in_progress** at a time for focus
+
+## Emergency Commands
+- **"follow rules"** - Audit and correct workflow violations
+- **"compacting"** - Generate handoff summary for new Claude Code chat
+
+Remember: Cursor Chat coordinates, Claude Code implements. This separation ensures clean workflows and prevents role confusion.
+
