@@ -77,3 +77,4 @@ When creating Claude Code prompts, use ONLY plain text:
 
 Remember: Cursor Chat coordinates, Claude Code implements. This separation ensures clean workflows and prevents role confusion.
 
+

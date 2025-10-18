@@ -80,3 +80,4 @@ Available in .env.local:
 
 Remember: You implement, Cursor Chat coordinates. Focus on creating high-quality, production-ready features that advance the Dog Friendly Finder vision.
 
+
