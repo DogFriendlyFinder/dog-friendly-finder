@@ -68,9 +68,10 @@ Main restaurant table containing all restaurant data.
 | `reservations_url` | text | Booking link (nullable) |
 | `reservations_required` | boolean | Default: false |
 | `best_times_description` | text | Narrative guide to best visiting times |
-| `best_times_buzzing` | text[] | Busy time periods array |
-| `best_times_relaxed` | text[] | Quiet time periods array |
-| `best_times_with_dogs` | text[] | Optimal times for dog owners |
+| `best_times_buzzing` | text[] | Busy time periods array (from Google Maps Popular Times) |
+| `best_times_relaxed` | text[] | Quiet time periods array (from Google Maps Popular Times) |
+| `best_times_with_dogs` | text[] | Optimal times for dog owners (AI-generated from Popular Times data) |
+| `popular_times_raw` | jsonb | Raw popular times data from Google Maps scrape |
 | `getting_there_public` | text | Public transport directions |
 | `getting_there_car` | text | Driving directions and parking |
 | `getting_there_with_dogs` | text | Dog-specific transportation notes |
@@ -465,36 +466,125 @@ places/
 ## Data Collection Workflow
 
 ### Phase 1: Google Places Autocomplete
-**Admin Interface:**
-- Text input with Google Places API autocomplete
-- User types restaurant name (e.g., "Bluebird Chelsea")
-- Dropdown shows matching places
-- User selects place OR manually enters if not found
-- Captures: `google_place_id`, `name`, `address`, `coordinates`
+**Admin Interface Location:** `/admin/add`
 
-### Phase 2: Firecrawl v2 Scraping
-**API Integration:** https://docs.firecrawl.dev/migrate-to-v2
+**User Flow:**
+- Admin uses Google Places Autocomplete input field
+- Types restaurant name (e.g., "The Spaniards Inn, Hampstead")
+- Real-time dropdown shows matching places with:
+  - Name
+  - Formatted address
+  - Google rating
+  - Total reviews
+- Admin selects place from dropdown
+- Selected place displays as a card with summary info
+- "Run" button becomes enabled
 
-**Process:**
-1. Determine target URLs:
-   - Official website (from Google Places)
-   - Delivery platforms (Deliveroo, Uber Eats, etc.)
-   - Review sites (TripAdvisor, OpenTable if needed)
+**Captured Data:**
+- `google_place_id` (e.g., `ChIJix2arm8adkgR6AQ5Md_aF8Y`)
+- `name`
+- `formatted_address`
+- `geometry.location` (lat/lng coordinates)
+- `rating`
+- `user_ratings_total`
 
-2. Use Firecrawl `/scrape` endpoint for single pages OR `/crawl` for multi-page sites
+### Phase 2: Multi-Source Data Scraping
+**API Integration:** Firecrawl v2 + Google Places API
 
-3. Extract:
-   - Menu data (priority: website → delivery sites → review sites)
-   - Operating hours
-   - Photos (high-res preferred)
-   - Awards/accolades
-   - Pricing information
-   - Amenities/features
-   - Contact details
-   - Reviews (Google, TripAdvisor, OpenTable)
-   - Social media links
+**Process Stages (displayed in UI with status indicators):**
 
-4. Store raw scraped data temporarily for processing
+**Stage 1: Fetching Place Data**
+1. **Google Business Profile (Google Places API)**
+   - Endpoint: `https://maps.googleapis.com/maps/api/place/details/json`
+   - Fields requested: `name`, `formatted_address`, `formatted_phone_number`, `website`, `opening_hours`, `price_level`, `rating`, `user_ratings_total`, `photos`, `reviews`, `editorial_summary`, `business_status`, `url`, `current_opening_hours`, `utc_offset`
+   - Extracts: Basic info, hours, reviews, photos, ratings
+
+2. **Google Maps Place Page (via Firecrawl v2)** ⭐ **KEY DISCOVERY**
+   - URL: `https://www.google.com/maps?q=place_id:{PLACE_ID}`
+   - Example: `https://www.google.com/maps?q=place_id:ChIJix2arm8adkgR6AQ5Md_aF8Y`
+   - **Why this is important:** Google Maps page contains **Popular Times/Busy Periods** data that is NOT available through the standard Google Places API
+   - Extracted data includes:
+     - **Popular times visualization** (hourly busy patterns per day)
+     - **Live busy status** ("Busier than usual", etc.)
+     - Full review text with photos
+     - Q&A section
+     - Menu highlights with photos
+     - Photo categories (Latest, Food & drink, Vibe, etc.)
+     - Price range statistics
+     - Related places
+   - Firecrawl returns markdown + HTML for comprehensive extraction
+
+3. **Official Restaurant Website (via Firecrawl v2)**
+   - URL obtained from Google Places API `website` field
+   - Formats: `["markdown", "html"]`
+   - Options: `onlyMainContent: true`, `waitFor: 2000`
+   - Extracts: Detailed menu, special events, reservation info
+
+**Stage 2: Uploading Images** (Coming in Phase 4)
+- Download image URLs from Google Places API `photos` field
+- Upload to Supabase Storage `scraped/` folder
+- Prepare for Vision API quality assessment
+
+**Stage 3: Analysing Images** (Coming in Phase 4)
+- Send images to OpenAI Vision API
+- Score each image 0-10 on quality criteria
+- Identify best images for selection
+
+**Stage 4: Storing Images** (Coming in Phase 4)
+- Move approved images (score >7.0) to `selected/` folder
+- Delete or archive low-quality images
+- Generate URLs for database storage
+
+**Stage 5: Generating Content** (Coming in Phase 3)
+- Send all scraped data to Anthropic API
+- Generate SEO-optimized descriptions
+- Structure menu data
+- Create FAQs
+- Summarize reviews
+
+**Stage 6: Mapping Fields** (Coming in Phase 5)
+- Map scraped data to database schema
+- Lookup or create cuisine entries
+- Lookup or create category entries
+- Associate features, meals, dishes
+
+**Stage 7: Uploading to Database** (Coming in Phase 5)
+- Insert restaurant record
+- Insert menu items
+- Create many-to-many associations
+- Store photos array in JSONB
+
+**Additional Source Scraping (Secondary Priority):**
+
+4. **Deliveroo**
+   - URL: `https://deliveroo.co.uk/search?q={restaurant_name}`
+   - Extract: Menu items, pricing, delivery info
+
+5. **Uber Eats**
+   - URL: `https://www.ubereats.com/gb/search?q={restaurant_name}`
+   - Extract: Menu items, pricing, popular dishes
+
+6. **Just Eat**
+   - URL: `https://www.just-eat.co.uk/search?q={restaurant_name}`
+   - Extract: Menu items, pricing, cuisine categories
+
+7. **TripAdvisor**
+   - URL: `https://www.tripadvisor.co.uk/Search?q={restaurant_name}`
+   - Extract: Reviews, ratings, awards, photos
+
+8. **OpenTable**
+   - URL: `https://www.opentable.co.uk/s?term={restaurant_name}`
+   - Extract: Reviews, ratings, reservation availability
+
+9. **The Fork**
+   - URL: `https://www.thefork.co.uk/search?term={restaurant_name}`
+   - Extract: Reviews, ratings, special offers
+
+**Error Handling:**
+- Each source scrape is independent
+- Failures are logged but don't stop the pipeline
+- Response includes `successfulSources` and `failedSources` counts
+- UI shows error state for failed stages
 
 ### Phase 3: Anthropic AI Processing
 **API:** Anthropic Claude API
@@ -625,33 +715,118 @@ places/
 
 ## Admin Interface Requirements
 
-### Restaurant Entry Page
-**URL:** `/admin/restaurants/new`
+### Add Restaurant Page
+**URL:** `/admin/add`
 
-**Components:**
-1. **Google Places Search:**
-   - Autocomplete text input
-   - Display matching results
-   - Allow manual entry if not found
+**Layout:** Three-column interface with real-time data extraction preview
 
-2. **Run Scraper Button:**
-   - Triggers Firecrawl + Anthropic + Vision pipeline
-   - Shows progress indicator
-   - Real-time status updates
+**Column 1: Context & Restaurant Sources (384px width, left sidebar)**
 
-3. **Preview/Review Interface:**
-   - Display structured data before final save
-   - Edit capabilities for any field
-   - Image gallery with approval checkboxes
-   - FAQ editor
-   - Menu review (expand/collapse sections)
+**Section 1: Context**
+- Icon badge with MapPin icon
+- Heading: "Context"
+- Description: "Add restaurants to the Dog Friendly Finder directory"
 
-4. **Approval Actions:**
-   - "Save Draft" - Stores as `published: false`
-   - "Publish" - Makes live immediately
-   - "Discard" - Cancels and clears
+**Section 2: Restaurant Sources**
+- Icon badge with number "2"
+- Heading: "Restaurant Sources"
+- **Google Places Autocomplete Input:**
+  - Placeholder: "Search restaurants..."
+  - Real-time autocomplete dropdown
+  - Powered by `@react-google-maps/api`
 
-### Restaurant List Page
+- **Selected Place Card** (shown after selection):
+  - Restaurant name (truncated)
+  - Formatted address (max 2 lines)
+  - Star rating with count (e.g., "4.4 (6,049 reviews)")
+  - Icons for rating (Star) and review count (Users)
+
+- **Run Button:**
+  - Full width
+  - Enabled only when place is selected
+  - Triggers scraping pipeline
+
+**Section 3: Process Status Indicators** (shown after Run is clicked)
+- Separator above
+- 7 processing stages with status icons:
+  1. Fetching Place Data
+  2. Uploading Images
+  3. Analysing Images
+  4. Storing Images
+  5. Generating Content
+  6. Mapping Fields
+  7. Uploading to Database
+
+**Status Indicator States:**
+- **Pending:** Grey border circle (14px, 3px border, `#d1d5db`)
+- **Loading:** Grey spinner (ldrs ring, 14px, 3px stroke, `#d1d5db`)
+- **Completed:** Green filled circle (14px, `border-green-500 bg-green-500`)
+- **Error:** Red filled circle (14px, `border-red-500 bg-red-500`)
+
+Each stage displays:
+- Left: Stage name in small grey text
+- Right: Status indicator icon
+
+**Column 2: Extracted Data (384px width, middle panel)**
+
+**Header:**
+- Icon badge with MapPin icon
+- Heading: "Extracted Data"
+- Description: "Data extracted from multiple sources"
+
+**Data Sections** (shown when scraping is running):
+
+1. **Basic Information** (numbered badge "1")
+   - Name
+   - Address
+   - Phone
+   - Website
+   - Price Range
+
+2. **Cuisine & Categories** (numbered badge "2")
+   - Cuisine
+   - Category
+   - Meals
+
+3. **Hours & Reservations** (numbered badge "3")
+   - Open Hours
+   - Reservations
+
+4. **Ratings & Reviews** (numbered badge "4")
+   - Google Rating
+   - TripAdvisor
+   - Overall Score
+
+5. **Features & Amenities** (numbered badge "5")
+   - Dog Friendly
+   - Outdoor Seating
+   - WiFi
+   - Other features
+
+6. **Awards** (numbered badge "6")
+   - Michelin
+   - AA Rosettes
+   - Other awards
+
+**Data Display Format:**
+- Each field: Left-justified label (grey text) | Right-justified value (bold text)
+- Separators between fields
+- Sections separated by spacing
+
+**Column 3: Main Content (flex-1, right panel)**
+- Currently empty
+- Reserved for future features:
+  - Preview of generated content
+  - Image gallery
+  - Menu preview
+  - Edit interface
+
+**Status Tracking:**
+- Real-time updates as pipeline progresses
+- Error states displayed inline
+- Success confirmation when complete
+
+### Restaurant List Page (Future)
 **URL:** `/admin/restaurants`
 
 **Features:**
