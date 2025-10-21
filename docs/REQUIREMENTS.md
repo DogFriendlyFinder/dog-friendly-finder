@@ -9,11 +9,12 @@ Dog Friendly Finder is a comprehensive directory of dog-friendly restaurants in 
 ### Core Workflow
 
 1. **Admin Input**: Admin enters restaurant name via Google Places API autocomplete
-2. **Data Collection**: Firecrawl v2 scrapes comprehensive restaurant data
-3. **AI Processing**: Anthropic API structures and enriches scraped data
-4. **Quality Control**: OpenAI Vision API validates image quality
-5. **Database Population**: Structured data populates Supabase PostgreSQL database
-6. **Public Display**: SEO-optimized pages with dynamically generated schema markup
+2. **Data Collection**: Apify Google Places scraper extracts comprehensive restaurant data (primary source)
+3. **Supplementary Scraping**: Firecrawl v2 scrapes additional data from review sites and delivery platforms (secondary sources)
+4. **AI Processing**: Anthropic API structures and enriches scraped data
+5. **Quality Control**: OpenAI Vision API validates image quality
+6. **Database Population**: Structured data populates Supabase PostgreSQL database
+7. **Public Display**: SEO-optimized pages with dynamically generated schema markup
 
 ---
 
@@ -63,8 +64,10 @@ Main restaurant table containing all restaurant data.
 | `social_media_urls` | jsonb | Social media links (structure below) |
 | `google_place_id` | text | Google Places API identifier (nullable) |
 | `dress_code` | text | Dress code requirements (nullable) |
-| `menu_raw` | jsonb | Original scraped menu (source of truth) |
-| `menu_last_parsed` | timestamptz | When menu was last parsed to items table |
+| `apify_output` | jsonb | Complete Apify API response (source of truth for Google Places data) |
+| `firecrawl_output` | jsonb | Aggregated Firecrawl scrape results from review sites |
+| `menu_data` | jsonb | Structured menu data from Firecrawl menu scraping (source of truth) |
+| `menu_last_parsed` | timestamptz | When menu_data was last parsed to items table |
 | `reservations_url` | text | Booking link (nullable) |
 | `reservations_required` | boolean | Default: false |
 | `best_times_description` | text | Narrative guide to best visiting times |
@@ -178,6 +181,115 @@ Main restaurant table containing all restaurant data.
   "google": {"count": 1250, "average": 4.5},
   "tripadvisor": {"count": 850, "average": 4.2},
   "opentable": {"count": 320, "average": 4.6}
+}
+
+// apify_output (complete Apify API response - source of truth)
+{
+  "title": "The Spaniards Inn",
+  "description": "Historic 16th-century pub...",
+  "categoryName": "Pub",
+  "address": "Spaniards Rd, Hampstead, London NW3 7JJ, UK",
+  "street": "Spaniards Road",
+  "city": "London",
+  "postalCode": "NW3 7JJ",
+  "countryCode": "GB",
+  "website": "https://www.thespaniardshampstead.co.uk",
+  "phone": "+44 20 8731 8406",
+  "menu": "https://www.thespaniardshampstead.co.uk/menus",
+  "placeId": "ChIJix2arm8adkgR6AQ5Md_aF8Y",
+  "location": {"lat": 51.5686, "lng": -0.1653},
+  "price": "££",
+  "totalScore": 4.4,
+  "reviewsCount": 6049,
+  "openingHours": [
+    {"day": "Monday", "hours": "12:00 PM - 11:00 PM"},
+    {"day": "Tuesday", "hours": "12:00 PM - 11:00 PM"}
+  ],
+  "popularTimesHistogram": {
+    "Mo": [{"hour": 6, "occupancyPercent": 0}, {"hour": 12, "occupancyPercent": 45}],
+    "Tu": [{"hour": 6, "occupancyPercent": 0}],
+    "Su": [{"hour": 15, "occupancyPercent": 85}]
+  },
+  "popularDishes": ["Fish and Chips", "Sunday Roast", "Sticky Toffee Pudding"],
+  "additionalInfo": {
+    "Pets": [{"Dogs allowed": true}],
+    "Planning": [{"Accepts reservations": true}],
+    "Accessibility": ["Wheelchair accessible entrance"],
+    "Amenities": ["Outdoor seating", "Fireplace"],
+    "Payments": ["Credit cards", "Debit cards"]
+  },
+  "imageUrls": ["https://...", "https://..."],
+  "reviews": [
+    {
+      "text": "Great pub with lovely beer garden...",
+      "rating": 5,
+      "publishedAtDate": "2024-03-15",
+      "authorName": "John Smith"
+    }
+  ]
+}
+
+// firecrawl_output (aggregated from multiple sources)
+{
+  "tripadvisor": {
+    "rating": 4.5,
+    "reviews_count": 850,
+    "ranking": "#12 of 1,234 restaurants in London",
+    "price_range": "££-£££",
+    "cuisines": ["British", "Pub"],
+    "special_diets": ["Vegetarian Friendly", "Vegan Options"],
+    "scraped_at": "2024-03-20T10:30:00Z"
+  },
+  "opentable": {
+    "rating": 4.6,
+    "reviews_count": 320,
+    "price_range": "££",
+    "available_times": ["12:00", "12:30", "13:00"],
+    "scraped_at": "2024-03-20T10:31:00Z"
+  },
+  "thefork": {
+    "rating": 4.3,
+    "reviews_count": 210,
+    "offers": ["20% off food"],
+    "scraped_at": "2024-03-20T10:32:00Z"
+  },
+  "deliveroo": {
+    "available": true,
+    "delivery_fee": "£2.99",
+    "min_order": "£15",
+    "popular_items": ["Fish and Chips", "Burger"],
+    "scraped_at": "2024-03-20T10:33:00Z"
+  }
+}
+
+// menu_data (structured menu from Firecrawl)
+{
+  "menu_url": "https://www.thespaniardshampstead.co.uk/menus",
+  "scraped_at": "2024-03-20T10:35:00Z",
+  "sections": [
+    {
+      "name": "Starters",
+      "items": [
+        {
+          "name": "Soup of the Day",
+          "description": "Served with crusty bread",
+          "price": 6.50,
+          "dietary": ["vegetarian"]
+        }
+      ]
+    },
+    {
+      "name": "Mains",
+      "items": [
+        {
+          "name": "Fish and Chips",
+          "description": "Beer-battered cod with chips and mushy peas",
+          "price": 14.95,
+          "popular": true
+        }
+      ]
+    }
+  ]
 }
 ```
 
@@ -298,9 +410,13 @@ Canonical dishes for SEO pages.
 | `description` | text | General dish description |
 | `dish_category_id` | uuid | FK → restaurant_dish_categories.id |
 | `cuisine_id` | uuid | FK → restaurant_cuisines.id (nullable) |
+| `popular` | boolean | Marked as popular dish (from Apify popularDishes data) |
 | `meta_title` | text | SEO meta title |
 | `meta_description` | text | SEO meta description |
 | `created_at` | timestamptz | Default: now() |
+
+**Indexes:**
+- `popular` (partial index WHERE popular = true)
 
 **Join Table:** `restaurant_dish_links`
 - `restaurant_id` (FK → restaurants.id)
@@ -465,6 +581,29 @@ places/
 
 ## Data Collection Workflow
 
+### Key Database Strategy
+
+**Raw Data Storage Approach:**
+All API responses are stored in JSONB columns for audit trail and reprocessing capability:
+- `restaurants.apify_output` - Complete Apify Google Places response
+- `restaurants.firecrawl_output` - Aggregated review site data
+- `restaurants.menu_data` - Structured menu from Firecrawl
+
+**Benefits:**
+- ✅ Never need to re-scrape if processing fails
+- ✅ Complete audit trail of all source data
+- ✅ Can reprocess with different AI prompts without additional API costs
+- ✅ Debug data issues by examining raw inputs
+- ✅ Track data provenance for each field
+
+**Workflow Summary:**
+1. Create restaurant record immediately (Stage 0)
+2. Store raw API outputs in JSONB columns (Stages 1-3)
+3. Process raw data with Anthropic to generate content (Stage 7)
+4. Populate structured tables from processed data (Stage 8)
+
+---
+
 ### Phase 1: Google Places Autocomplete
 **Admin Interface Location:** `/admin/add`
 
@@ -489,70 +628,399 @@ places/
 - `user_ratings_total`
 
 ### Phase 2: Multi-Source Data Scraping
-**API Integration:** Firecrawl v2 + Google Places API
+**API Integration:** Apify (primary) + Firecrawl v2 (secondary) + Google Places API
+
+**Process Overview:**
+1. User clicks "Run" → Create restaurant record immediately with Google Places Autocomplete data
+2. Apify Fetch → Store complete response in `apify_output` jsonb column
+3. Firecrawl General Fetch → Store aggregated results in `firecrawl_output` jsonb column
+4. Firecrawl Menu Fetch → Store structured menu in `menu_data` jsonb column
+5. Later stages process these raw outputs with Anthropic for content generation
 
 **Process Stages (displayed in UI with status indicators):**
 
-**Stage 1: Fetching Place Data**
-1. **Google Business Profile (Google Places API)**
-   - Endpoint: `https://maps.googleapis.com/maps/api/place/details/json`
-   - Fields requested: `name`, `formatted_address`, `formatted_phone_number`, `website`, `opening_hours`, `price_level`, `rating`, `user_ratings_total`, `photos`, `reviews`, `editorial_summary`, `business_status`, `url`, `current_opening_hours`, `utc_offset`
-   - Extracts: Basic info, hours, reviews, photos, ratings
+**Stage 0: Create Restaurant Record (IMMEDIATE)**
+When "Run" button is clicked:
+- Create `restaurants` record with data from Google Places Autocomplete:
+  - `google_place_id`
+  - `name`
+  - `address`
+  - `latitude`, `longitude`
+  - `city` (extracted from address)
+  - `published: false`
+- Return `restaurant_id` to frontend for subsequent API calls
+- All subsequent stages update this existing record
 
-2. **Google Maps Place Page (via Firecrawl v2)** ⭐ **KEY DISCOVERY**
-   - URL: `https://www.google.com/maps?q=place_id:{PLACE_ID}`
-   - Example: `https://www.google.com/maps?q=place_id:ChIJix2arm8adkgR6AQ5Md_aF8Y`
-   - **Why this is important:** Google Maps page contains **Popular Times/Busy Periods** data that is NOT available through the standard Google Places API
-   - Extracted data includes:
-     - **Popular times visualization** (hourly busy patterns per day)
-     - **Live busy status** ("Busier than usual", etc.)
-     - Full review text with photos
-     - Q&A section
-     - Menu highlights with photos
-     - Photo categories (Latest, Food & drink, Vibe, etc.)
-     - Price range statistics
-     - Related places
-   - Firecrawl returns markdown + HTML for comprehensive extraction
+**Stage 1: Apify Fetch (PRIMARY SOURCE)**
+1. **Apify Google Places Scraper** ⭐ **PRIMARY DATA SOURCE**
+   - **Actor:** `compass/crawler-google-places`
+   - **API Endpoint:** `https://api.apify.com/v2/acts/compass~crawler-google-places/runs`
+   - **Authentication:** Bearer token with `APIFY_API_KEY`
+   - **Input Configuration:**
+     ```json
+     {
+       "includeWebResults": false,
+       "language": "en",
+       "maxCrawledPlacesPerSearch": 1,
+       "maxImages": 0,
+       "maximumLeadsEnrichmentRecords": 0,
+       "placeIds": ["ChIJix2arm8adkgR6AQ5Md_aF8Y"],
+       "scrapeContacts": false,
+       "scrapeDirectories": false,
+       "scrapeImageAuthors": false,
+       "scrapePlaceDetailPage": false,
+       "scrapeReviewsPersonalData": true,
+       "scrapeTableReservationProvider": false,
+       "skipClosedPlaces": false,
+       "searchMatching": "all",
+       "placeMinimumStars": "",
+       "website": "allPlaces",
+       "maxQuestions": 0,
+       "maxReviews": 0,
+       "reviewsSort": "newest",
+       "reviewsFilterString": "",
+       "reviewsOrigin": "all",
+       "allPlacesNoSearchAction": ""
+     }
+     ```
+   - **Workflow:**
+     1. Start actor run via POST request
+     2. Poll run status every 2 seconds (max 60 attempts = 2 minutes)
+     3. When status = "SUCCEEDED", fetch results from dataset
+   - **Extracted Data (Comprehensive):**
+     - **Basic Information:**
+       - `title` - Restaurant name
+       - `description` - Business description
+       - `categoryName` - Primary cuisine/category
+       - `address` - Full formatted address
+       - `street`, `city`, `postalCode`, `countryCode` - Address components
+       - `phone` - Phone number
+       - `website` - Official website URL
+       - `menu` - Menu URL
+       - `placeId` - Google Place ID
+       - `location` - `{ lat, lng }` coordinates
+       - `price` - Price range (e.g., "$$")
+     - **Ratings & Reviews:**
+       - `totalScore` - Overall rating (e.g., 4.4)
+       - `reviewsCount` - Total number of reviews
+       - Individual reviews with text, ratings, dates, author info
+     - **Operating Hours:**
+       - `openingHours` - Array of `{ day, hours }` objects
+       - Example: `[{ day: "Monday", hours: "12:00 PM - 11:00 PM" }]`
+     - **Popular Times Histogram** ⭐ **KEY FEATURE**
+       - `popularTimesHistogram` - Structured hourly occupancy data
+       - Format:
+         ```json
+         {
+           "Mo": [{ "hour": 6, "occupancyPercent": 0 }, { "hour": 7, "occupancyPercent": 12 }, ...],
+           "Tu": [...],
+           "We": [...],
+           "Th": [...],
+           "Fr": [...],
+           "Sa": [...],
+           "Su": [...]
+         }
+         ```
+       - **Why this is critical:** Enables calculation of busiest/quietest times for dog-friendly recommendations
+     - **Additional Information:**
+       - `additionalInfo.Pets` - Array with `"Dogs allowed"` boolean
+       - `additionalInfo.Planning` - Array with `"Accepts reservations"` boolean
+       - `additionalInfo.Accessibility` - Accessibility features
+       - `additionalInfo.Amenities` - Available amenities
+       - `additionalInfo.Offerings` - Service offerings
+       - `additionalInfo.Payments` - Accepted payment methods
+     - **Images:**
+       - `imageUrls` - Array of high-quality image URLs
+       - Categories: exterior, interior, food, menu, etc.
+   - **Response Format:**
+     ```json
+     {
+       "success": true,
+       "data": [{ /* full restaurant data */ }],
+       "runId": "abc123",
+       "datasetId": "def456"
+     }
+     ```
+   - **Database Storage:**
+     - Store complete response in `restaurants.apify_output` jsonb column
+     - Extract and populate individual fields:
+       - `name`, `address`, `phone`, `website`
+       - `price_range` (from `price`)
+       - `hours` jsonb (from `openingHours`)
+       - `popular_times_raw` jsonb (from `popularTimesHistogram`)
+       - Update `last_scraped_at` timestamp
 
-3. **Official Restaurant Website (via Firecrawl v2)**
-   - URL obtained from Google Places API `website` field
-   - Formats: `["markdown", "html"]`
-   - Options: `onlyMainContent: true`, `waitFor: 2000`
-   - Extracts: Detailed menu, special events, reservation info
+**Stage 2: Firecrawl General Fetch (SECONDARY SOURCE)**
+1. **Multi-Source Data Scraping** via Firecrawl v2 API
+   - **API Endpoint:** `https://api.firecrawl.dev/v1/scrape` (POST)
+   - **Authentication:** Bearer token with `FIRECRAWL_API_KEY`
+   - **Search Strategy:** Build location-aware query: `"{name} {location}"`
+     - Location extracted from address (neighborhood preferred over city)
+     - Removes postcode using regex: `/\b[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\b/i`
+     - Example: "Gaucho Hampstead 64 Heath St"
 
-**Stage 2: Uploading Images** (Coming in Phase 4)
-- Download image URLs from Google Places API `photos` field
+   - **Scraping Approach:** Google Search + Homepage (parallel execution)
+     - **Parallel Execution:** All scrapes run simultaneously for performance
+     - **Google Search Scraping Strategy:**
+       - Scrape Google search results pages (not direct site URLs)
+       - Why: More reliable than direct scraping (sites block bots)
+       - Contains: Links, reviews, ratings, contact info, popular times
+       - Example URL: `https://www.google.com/search?q=${encodeURIComponent(query)}`
+
+     - **8-10 Scrapes per Restaurant:**
+       1. Social Media (3): `{baseQuery} instagram`, `{baseQuery} facebook`, `{baseQuery} tiktok`
+       2. Review Sites (2): `{baseQuery} tripadvisor`, `{baseQuery} opentable`
+       3. Awards (2): `{baseQuery} awards`, `{baseQuery} michelin`
+       4. Homepage (1): Direct scrape of `website` from Google Places data
+       5. Menu (1-2): Hybrid approach (see Stage 3)
+
+   - **Request Configuration:**
+     ```json
+     {
+       "url": "https://www.google.com/search?q=...",
+       "formats": ["markdown"],
+       "onlyMainContent": true,
+       "waitFor": 2000
+     }
+     ```
+
+   - **Response Structure:**
+     ```json
+     {
+       "success": true,
+       "data": {
+         "markdown": "...",
+         "metadata": {
+           "title": "...",
+           "description": "...",
+           "statusCode": 200,
+           "url": "...",
+           "scrapeId": "...",
+           "creditsUsed": 1
+         }
+       }
+     }
+     ```
+
+   - **What's Captured from Google Search Results:**
+     - Social media profile URLs and follower counts
+     - TripAdvisor: ratings, review count, ranking
+     - OpenTable: reservation links, ratings
+     - Awards and recognition mentions
+     - Michelin Guide presence
+     - Restaurant contact info (phone, hours, address)
+     - Popular times data from Google Business Panel
+     - Review snippets and sentiment
+
+   - **Homepage Scraping:**
+     - Direct scrape of restaurant's official website
+     - Captures: Features, dress code, descriptions, booking info
+     - Complements Google search data with official source
+
+   - **Database Storage:**
+     - Store complete raw markdown from ALL scrapes
+     - Single JSONB structure in `restaurants.firecrawl_output`:
+       ```json
+       {
+         "scraped_at": "2025-10-19T...",
+         "restaurant_name": "Gaucho Hampstead",
+         "location": "64 Heath St",
+         "scrapes": {
+           "social_instagram": {
+             "query": "https://www.google.com/search?q=...",
+             "success": true,
+             "markdown": "[23,919 characters of raw markdown]",
+             "metadata": {...},
+             "error": null
+           },
+           "social_facebook": {...},
+           "social_tiktok": {...},
+           "review_tripadvisor": {...},
+           "review_opentable": {...},
+           "awards_general": {...},
+           "awards_michelin": {...},
+           "homepage": {...}
+         }
+       }
+       ```
+     - **No separate columns** - all data in single `firecrawl_output` field
+     - Anthropic will parse raw markdown later to extract structured data
+
+**Stage 3: Firecrawl Menu Fetch (MENU-SPECIFIC)**
+1. **Hybrid Menu Scraping Strategy** via Firecrawl v2 API
+   - **API Endpoint:** `https://api.firecrawl.dev/v1/scrape` (POST)
+   - **Strategy:** Hybrid approach for maximum reliability
+
+   - **Approach A: Direct Website Menu Scraping (Preferred)**
+     - Try common menu paths sequentially:
+       - `/menu`
+       - `/menus`
+       - `/food`
+       - `/our-menu`
+     - Construct URL: `{website}{path}`
+     - Success criteria: `markdown.length > 100` AND no error messages
+     - **Advantage:** Gets actual menu with items, descriptions, prices
+     - **Example:** Successfully scraped Gaucho's A La Carte PDF menu
+       - URL: `https://gauchorestaurants.com/menus/`
+       - Result: 5,731 characters with all menu categories and PDFs
+
+   - **Approach B: Google Search Fallback**
+     - Triggered when: Direct paths fail or return insufficient data
+     - Query: `{name} {location} menu`
+     - Scrape Google search results page
+     - Contains: Menu links, popular dishes, pricing hints
+
+   - **PDF Menu Scraping:**
+     - **Firecrawl v2 supports PDF extraction!**
+     - Can scrape PDF menu URLs directly (e.g., A La Carte PDF)
+     - Example: `https://gauchorestaurants.com/wp-content/.../Gaucho_FULL_ALC.pdf`
+     - Returns markdown with complete menu structure
+     - **Success:** Gaucho A La Carte menu scraped with 90+ items
+       - Sections: Snacks, Starters, Empanadas, Steaks, Mains, Sides, etc.
+       - Full item names, descriptions, and prices (£)
+
+   - **Request Configuration:**
+     ```json
+     {
+       "url": "https://restaurant.com/menu",
+       "formats": ["markdown"],
+       "onlyMainContent": true,
+       "waitFor": 2000
+     }
+     ```
+
+   - **Database Storage:**
+     - Store in separate `restaurants.menu_data` jsonb column:
+       ```json
+       {
+         "scraped_at": "2025-10-19T...",
+         "menu_url": "https://gauchorestaurants.com/menus/",
+         "raw_markdown": "[7,382 characters of complete menu]",
+         "scrape_method": "direct_scrape",
+         "metadata": {
+           "statusCode": 200,
+           "numPages": 1,
+           "creditsUsed": 1
+         }
+       }
+       ```
+     - **Menu Content Includes:**
+       - Section headers (Starters, Mains, Desserts, etc.)
+       - Item names with prices
+       - Descriptions and dietary markers
+       - Special notes (e.g., "Sunday only", "Seasonal")
+     - Update `menu_last_parsed` timestamp
+
+   - **Cost Efficiency:**
+     - Menu scraping: 1-2 credits per restaurant
+     - Total Firecrawl: 9-10 credits per restaurant (~$0.27-0.30)
+     - Hybrid approach maximizes success rate while minimizing retries
+
+**Stage 4: Uploading Images** (Future)
+- Download image URLs from `apify_output.imageUrls`
 - Upload to Supabase Storage `scraped/` folder
 - Prepare for Vision API quality assessment
 
-**Stage 3: Analysing Images** (Coming in Phase 4)
+**Stage 5: Analysing Images** (Future)
 - Send images to OpenAI Vision API
 - Score each image 0-10 on quality criteria
 - Identify best images for selection
 
-**Stage 4: Storing Images** (Coming in Phase 4)
+**Stage 6: Storing Images** (Future)
 - Move approved images (score >7.0) to `selected/` folder
 - Delete or archive low-quality images
-- Generate URLs for database storage
+- Store selected image URLs in `restaurants.photos` jsonb
 
-**Stage 5: Generating Content** (Coming in Phase 3)
-- Send all scraped data to Anthropic API
-- Generate SEO-optimized descriptions
-- Structure menu data
-- Create FAQs
-- Summarize reviews
+**Stage 7: Generating Content with Anthropic** (Future)
 
-**Stage 6: Mapping Fields** (Coming in Phase 5)
-- Map scraped data to database schema
-- Lookup or create cuisine entries
-- Lookup or create category entries
-- Associate features, meals, dishes
+**Architecture:** Single API endpoint with live database integration
 
-**Stage 7: Uploading to Database** (Coming in Phase 5)
-- Insert restaurant record
-- Insert menu items
-- Create many-to-many associations
-- Store photos array in JSONB
+**API Route:** `POST /api/restaurants/[id]/generate-content`
+
+**Process Flow:**
+
+1. **Fetch Live Reference Data** (not static - always current)
+   - Query `restaurant_cuisines` table → array of cuisine names (e.g., ["Japanese", "Italian", ...])
+   - Query `restaurant_categories` table → array of category names (e.g., ["Fine Dining", "Casual", ...])
+   - Query `restaurant_features` table → array of feature names (e.g., ["Dog Water Bowls", "Outdoor Seating", ...])
+   - Query `restaurant_meals` table → array of meal names (e.g., ["Breakfast", "Lunch", "Dinner"])
+
+2. **Build Dynamic Prompt with Live Data**
+   - Include live reference data lists in prompt
+   - Instruction: "Use existing names from lists if applicable, suggest new ones if needed"
+   - Ensures AI learns current vocabulary and naming conventions
+   - Reduces duplicate creation while allowing flexibility
+
+3. **Input to Anthropic:**
+   - `restaurants.apify_output` (complete Google Places data)
+   - `restaurants.firecrawl_output` (review sites data)
+   - `restaurants.menu_data` (structured menu)
+   - **Live reference lists:** available cuisines, categories, features, meals
+
+4. **Anthropic Generates:**
+   - `slug`: Intelligent URL slug (see ANTHROPIC_CONTENT_GENERATION_SPEC.md for rules)
+   - `about`: SEO-optimized description (200-300 words)
+   - `best_times_description`: Narrative guide to visiting times
+   - `public_review_sentiment`: Review summary
+   - `faqs`: 5-10 relevant FAQs
+   - `ratings`: Aggregate scores from multiple sources
+   - Structured `restaurant_menu_items` from `menu_data`
+   - **Reference suggestions (as names, not IDs):**
+     - `cuisines`: ["Japanese", "Asian Fusion"] (prefer existing names, suggest new if needed)
+     - `categories`: ["Fine Dining", "Romantic"]
+     - `features`: ["Dog Water Bowls", "Outdoor Seating"]
+     - `meals`: ["Lunch", "Dinner"]
+     - `popular_dishes`: ["Tonkotsu Ramen", "Gyoza"]
+
+5. **Store Raw AI Response** (for audit trail and retry capability)
+   - Save complete Anthropic output to database before processing
+   - Enables reprocessing without re-calling Anthropic API
+   - Provides audit trail of all AI-generated content
+
+6. **Process AI Response & Update Database:**
+
+   **A. Match or Create Reference Entries (Auto-Creation Enabled)**
+
+   For each suggested name (cuisine/category/feature/meal):
+   - **Step 1:** Try exact match (case-insensitive) against existing entries
+   - **Step 2:** If no match found → **Auto-create new entry** with:
+     - `name`: Normalized name (title case, trimmed)
+     - `slug`: Generated slug (lowercase, hyphenated)
+     - `meta_title`: Auto-generated SEO title
+     - `meta_description`: Auto-generated SEO description
+   - **Step 3:** Collect IDs (existing or newly created)
+   - **No manual approval required** - all suggestions are auto-created
+
+   **B. Create Junction Table Links**
+   - Insert relationships in `restaurant_cuisine_links`
+   - Insert relationships in `restaurant_category_links`
+   - Insert relationships in `restaurant_feature_links`
+   - Insert relationships in `restaurant_meal_links`
+
+   **C. Update Restaurant Content Fields**
+   - Update `slug`, `about`, `best_times_description`, `public_review_sentiment`
+   - Update `faqs`, `ratings`, and other JSONB fields
+
+   **D. Insert Menu Items**
+   - Bulk insert parsed menu items into `restaurant_menu_items`
+
+   **E. Match Popular Dishes**
+   - Match `apify_output.popularDishes` to `restaurant_dishes` table
+   - Create dish entries if needed
+   - Mark as popular: `UPDATE restaurant_dishes SET popular = true WHERE ...`
+   - Create links via `restaurant_dish_links`
+
+7. **Return Complete Result:**
+   - Success status
+   - Generated content summary
+   - List of new cuisines/categories/features created
+   - Token usage and processing time
+   - Any warnings or notes for review
+
+**Stage 8: Final Review & Publish** (Future)
+- Admin reviews all generated content
+- Manually approve/edit as needed
+- Set `published: true` when ready to go live
 
 **Additional Source Scraping (Secondary Priority):**
 
@@ -589,45 +1057,124 @@ places/
 ### Phase 3: Anthropic AI Processing
 **API:** Anthropic Claude API
 
-**Input:** Raw Firecrawl data + restaurant context
+**Architecture:** Hybrid Option C - AI receives live reference data names (not IDs)
+
+**Input Sources:**
+
+1. **Restaurant Data (from database JSONB columns):**
+   - `restaurants.apify_output` - Complete Google Places data including:
+     - Basic info, ratings, reviews, popular times
+     - Popular dishes array
+     - Operating hours, amenities, accessibility
+   - `restaurants.firecrawl_output` - Review sites data including:
+     - TripAdvisor, OpenTable, The Fork ratings/reviews
+     - Deliveroo, Uber Eats, Just Eat menu items
+   - `restaurants.menu_data` - Structured menu with sections and items
+
+2. **Live Reference Data (fetched from database every time):**
+   - **Available Cuisines:** Array of current cuisine names from `restaurant_cuisines`
+     - Example: ["Japanese", "Italian", "British", "French", "Indian", ...]
+   - **Available Categories:** Array of current category names from `restaurant_categories`
+     - Example: ["Fine Dining", "Casual", "Gastropub", "Romantic", ...]
+   - **Available Features:** Array of current feature names from `restaurant_features`
+     - Example: ["Dog Water Bowls", "Outdoor Seating", "WiFi", ...]
+   - **Available Meals:** Array of current meal names from `restaurant_meals`
+     - Example: ["Breakfast", "Lunch", "Dinner", "Brunch", ...]
+
+**Prompt Strategy:**
+- Include live reference lists in prompt with instruction: "Use these existing names if applicable, suggest new ones only for legitimately unique styles"
+- AI learns current vocabulary and naming conventions
+- Reduces duplicates while allowing flexibility for new cuisines/features
+- Always reflects latest database state (not static lists)
 
 **Anthropic Tasks:**
-1. **Structure Extraction:**
-   - Parse menu into sections and items
-   - Extract operating hours in consistent format
-   - Identify cuisine types
-   - List features/amenities (no assumptions, data-driven only)
-   - Extract ratings data
-   - Extract social media URLs
+
+1. **Intelligent Slug Generation** (NEW)
+   - Analyze restaurant name and "people also search for" data (from Apify)
+   - Determine if location is needed in slug (chain vs. unique restaurant)
+   - Apply formatting rules: lowercase, hyphens, remove apostrophes correctly
+   - Ensure uniqueness (check if slug exists, append -2, -3, etc.)
+   - See `ANTHROPIC_CONTENT_GENERATION_SPEC.md` for complete rules
 
 2. **Content Generation:**
    - `about`: SEO-optimized description (200-300 words) highlighting:
-     - Key menu items
-     - Dog-friendly features
-     - Unique selling points
-     - Ambiance and atmosphere
-     - Awards/recognition
+     - Key menu items (from menu_data and popularDishes)
+     - Dog-friendly features (from apify_output.additionalInfo.Pets)
+     - Unique selling points (from reviews)
+     - Ambiance and atmosphere (from review sentiment)
+     - Awards/recognition (if present)
      - Natural, human-sounding tone (not AI-like)
 
-   - `best_times_description`: Narrative guide to optimal visiting times
+   - `best_times_description`: Narrative guide based on popularTimesHistogram
+     - Analyze busy vs. quiet periods
+     - Recommend times for dog owners
 
-   - `public_review_sentiment`: Summarize recent reviews across platforms
+   - `public_review_sentiment`: Aggregate and summarize reviews from:
+     - apify_output.reviews
+     - firecrawl_output review sites
 
-   - `faqs`: Generate 5-10 relevant FAQs based on venue data
+   - `faqs`: Generate 5-10 relevant FAQs based on all available data
 
-3. **Data Enrichment:**
-   - Calculate rating scores based on review sentiment
-   - Identify best times (buzzing vs. relaxed)
-   - Suggest dog-friendly visiting times
-   - Generate transportation directions
-   - Identify accessibility features
+3. **Menu Processing:**
+   - Parse `menu_data.sections` into individual `restaurant_menu_items` records
+   - Extract: section_name, item_name, description, price, dietary_tags
+   - Maintain display_order within sections
 
-4. **Output Format:**
-   - Structured JSON ready for database insertion
-   - Reference existing database entries (e.g., cuisine_id for "Japanese")
-   - Flag new entries needed (e.g., new cuisine type "Peruvian-Japanese Fusion")
+4. **Reference Data Suggestions (as names, not IDs):**
+   - **Cuisines:** Suggest 1-3 cuisine names
+     - Prefer existing names from provided list
+     - Only suggest new cuisines for legitimately unique styles
+     - Example: ["Japanese", "Asian Fusion"] (not "Japanese Cuisine" or "japanese")
 
-**Critical Rule:** Anthropic must ONLY use actual data from Firecrawl. No fabrication or assumptions.
+   - **Categories:** Suggest 1-3 category names
+     - Example: ["Fine Dining", "Romantic"]
+
+   - **Features:** Suggest relevant features (max 20)
+     - Prefer existing names from list
+     - Example: ["Dog Water Bowls", "Outdoor Seating", "Reservations Available"]
+
+   - **Meals:** Suggest meal types served (max 5)
+     - Example: ["Lunch", "Dinner", "Brunch"]
+
+5. **Popular Dish Matching:**
+   - Take `apify_output.popularDishes` array (e.g., ["Fish and Chips", "Sunday Roast"])
+   - Suggest dish names for matching/creation
+   - Backend will match or create in `restaurant_dishes` table
+
+6. **Data Enrichment:**
+   - Calculate overall rating scores from multiple sources
+   - Generate transportation directions (getting_there_public, getting_there_car)
+
+7. **Output Format:**
+   - Structured JSON with:
+     - `slug`: Generated slug
+     - Content fields (about, best_times_description, faqs, etc.)
+     - Menu items array ready for bulk insert
+     - **Reference suggestions (NAMES ONLY):**
+       - `cuisines`: ["Japanese", "Asian Fusion"]
+       - `categories`: ["Fine Dining", "Romantic"]
+       - `features`: ["Dog Water Bowls", "Outdoor Seating"]
+       - `meals`: ["Lunch", "Dinner"]
+       - `popular_dishes`: ["Tonkotsu Ramen", "Gyoza"]
+
+**Backend Processing (after Anthropic response):**
+
+For each suggested name:
+1. **Exact match (case-insensitive):** Check if name exists in respective table
+2. **If match found:** Use existing entry ID
+3. **If no match:** Auto-create new entry with:
+   - Normalized name (title case, trimmed)
+   - Auto-generated slug
+   - Auto-generated SEO metadata
+4. **Create junction table links** with collected IDs
+5. **No manual approval required** - all suggestions are auto-created
+
+**Critical Rules:**
+- Anthropic must ONLY use actual data from input sources
+- No fabrication or assumptions
+- All claims must be traceable to source data
+- Flag any ambiguous or contradictory information
+- For reference data: prefer existing names from lists, suggest new only when truly unique
 
 ### Phase 4: OpenAI Vision API (Image Quality Control)
 **Process:**
@@ -653,30 +1200,129 @@ places/
 ### Phase 5: Database Population
 **API Orchestration Layer:**
 
-1. **Lookup/Create Referenced Data:**
-   - Check if cuisine exists; if not, create entry in `restaurant_cuisines`
-   - Check if category exists; if not, create entry in `restaurant_categories`
-   - Check features; create new in `restaurant_features` if needed
-   - Repeat for meals, dish categories, etc.
+**Note:** Restaurant record is created IMMEDIATELY when "Run" is clicked (Stage 0), then updated throughout the pipeline.
 
-2. **Insert Restaurant:**
-   - Create `restaurants` record with all fields
-   - Store `menu_raw` JSONB
-   - Store `ratings`, `restaurant_awards`, `faqs`, `photos` JSONB fields
+1. **Stage 1 - Apify Data Storage:**
+   - Store complete response in `restaurants.apify_output` jsonb
+   - Update individual fields: name, address, phone, website, price_range
+   - Update `hours` jsonb from openingHours
+   - Update `popular_times_raw` jsonb from popularTimesHistogram
+   - Set `last_scraped_at` timestamp
 
-3. **Insert Menu Items:**
-   - Create `restaurant_menu_items` records (bulk insert for performance)
+2. **Stage 2 - Firecrawl General Data Storage:**
+   - Store aggregated review site data in `restaurants.firecrawl_output` jsonb
+   - Structure: `{ "tripadvisor": {...}, "opentable": {...}, etc. }`
 
-4. **Associate Many-to-Many:**
-   - Link cuisines via `restaurant_cuisine_links`
-   - Link categories via `restaurant_category_links`
-   - Link features via `restaurant_feature_links`
-   - Link meals via `restaurant_meal_links`
-   - Link dishes via `restaurant_dish_links`
+3. **Stage 3 - Menu Data Storage:**
+   - Store structured menu in `restaurants.menu_data` jsonb
+   - Update `menu_last_parsed` timestamp
 
-5. **Set Status:**
-   - Mark `published: false` for manual review
-   - Admin reviews and approves before going live
+4. **Stage 7 - Anthropic Content Population:**
+
+   **API Route:** `POST /api/restaurants/[id]/generate-content`
+
+   **Process (all in single endpoint):**
+
+   **A. Fetch Live Reference Data:**
+   - Query all current cuisines, categories, features, meals from database
+   - Build arrays of names (not IDs) to include in prompt
+
+   **B. Build Prompt & Call Anthropic:**
+   - Include restaurant data (apify_output, firecrawl_output, menu_data)
+   - Include live reference lists
+   - Call Anthropic API
+
+   **C. Store Raw AI Response:**
+   - Save complete Anthropic output to database column (for audit/retry)
+   - Enables reprocessing without re-calling API
+
+   **D. Process AI Response:**
+
+   **D1. Match or Create Reference Entries (Auto-Creation):**
+
+   For **Cuisines** (suggested names: e.g., ["Japanese", "Asian Fusion"]):
+   - For each name:
+     1. Try exact match (case-insensitive): `SELECT * FROM restaurant_cuisines WHERE LOWER(name) = LOWER('Japanese')`
+     2. If match found → collect ID
+     3. If NO match → **Auto-create:**
+        ```sql
+        INSERT INTO restaurant_cuisines (name, slug, meta_title, meta_description)
+        VALUES (
+          'Japanese',
+          'japanese',
+          'Japanese Restaurants | Dog Friendly Finder',
+          'Discover dog-friendly Japanese restaurants across the UK.'
+        )
+        ```
+     4. Collect new ID
+   - Create junction table links:
+     ```sql
+     INSERT INTO restaurant_cuisine_links (restaurant_id, cuisine_id)
+     VALUES (?, ?), (?, ?)
+     ```
+
+   **Repeat for:**
+   - **Categories** → `restaurant_categories` + `restaurant_category_links`
+   - **Features** → `restaurant_features` + `restaurant_feature_links`
+   - **Meals** → `restaurant_meals` + `restaurant_meal_links`
+
+   **D2. Update Restaurant Content Fields:**
+   ```sql
+   UPDATE restaurants SET
+     slug = ?,
+     about = ?,
+     best_times_description = ?,
+     public_review_sentiment = ?,
+     sentiment_score = ?,
+     faqs = ?::jsonb,
+     ratings = ?::jsonb,
+     getting_there_public = ?,
+     getting_there_car = ?,
+     getting_there_with_dogs = ?
+   WHERE id = ?
+   ```
+
+   **D3. Insert Menu Items:**
+   - Bulk insert into `restaurant_menu_items` from Anthropic output:
+   ```sql
+   INSERT INTO restaurant_menu_items
+     (restaurant_id, section_name, item_name, description, price, dietary_tags, display_order)
+   VALUES
+     (?, 'Starters', 'Soup of the Day', '...', 6.50, ARRAY['vegetarian'], 1),
+     (?, 'Mains', 'Fish and Chips', '...', 14.95, ARRAY[], 2),
+     ...
+   ```
+
+   **D4. Match or Create Popular Dishes:**
+   - For each dish name in `popular_dishes` array:
+     1. Try exact match in `restaurant_dishes` table
+     2. If NO match → create new entry with `popular = true`
+     3. Create link via `restaurant_dish_links`
+
+   **E. Return Complete Result:**
+   - Success status
+   - Generated content summary
+   - **New entries created:**
+     - List of newly created cuisines
+     - List of newly created categories
+     - List of newly created features
+     - List of newly created dishes
+   - Token usage and processing time
+   - Any warnings for review
+
+   **Key Features:**
+   - ✅ Single API call does everything
+   - ✅ Stores raw AI output for retry capability
+   - ✅ Auto-creates new reference entries (no approval needed)
+   - ✅ Always uses live database state for reference lists
+   - ✅ Transaction safety (rollback on errors)
+   - ✅ Complete audit trail
+
+5. **Final Review:**
+   - Restaurant remains `published: false` for admin review
+   - Admin can review newly created cuisines/categories in database
+   - Admin can edit any fields before publishing
+   - Set `published: true` when ready to go live
 
 ---
 
@@ -684,31 +1330,54 @@ places/
 
 ### Required APIs
 
-#### 1. Google Places API
+#### 1. Apify API ⭐ **PRIMARY DATA SOURCE**
+- **Key:** Stored in `.env.local` as `APIFY_API_KEY`
+- **Actor:** `compass/crawler-google-places`
+- **Base URL:** `https://api.apify.com/v2`
+- **Endpoints:**
+  - `/acts/compass~crawler-google-places/runs` - Start actor run
+  - `/actor-runs/{runId}` - Check run status
+  - `/datasets/{datasetId}/items` - Fetch results
+- **Authentication:** Bearer token in Authorization header
+- **Purpose:** Extract comprehensive Google Places data including popular times histogram
+- **Documentation:** https://apify.com/compass/crawler-google-places
+- **Rate Limiting:** Check Apify plan limits
+- **Cost:** Varies by plan, monitor usage in Apify dashboard
+
+#### 2. Google Places API
 - **Autocomplete:** Place search for admin input
 - **Place Details:** Get coordinates, address, phone, website
 - **Credentials:** Add to `.env.local` as `GOOGLE_PLACES_API_KEY`
 
-#### 2. Firecrawl v2 API
-- **Key:** `fc-c5e73c10497a4fe59ddc066dd5246cbc`
-- **Endpoints:**
-  - `/scrape` - Single page scraping
-  - `/crawl` - Multi-page crawling with async status checking
-- **Documentation:** https://docs.firecrawl.dev/migrate-to-v2
+#### 3. Firecrawl v2 API (SECONDARY SOURCE)
+- **Key:** Stored in `.env.local` as `FIRECRAWL_API_KEY`
+- **Base URL:** `https://api.firecrawl.dev/v1`
+- **Endpoint:** `/scrape` (POST) - Single page scraping
+- **Authentication:** Bearer token in Authorization header
+- **Purpose:** Supplementary data scraping
+  - Google search results for social media, reviews, awards
+  - Restaurant homepage
+  - Menu pages (including PDF menu extraction)
+- **Features Used:**
+  - Markdown format extraction
+  - PDF document parsing
+  - `onlyMainContent: true` for clean data
+  - `waitFor` parameter for dynamic content
+- **Documentation:** https://docs.firecrawl.dev/features/scrape
 
-#### 3. Anthropic API
-- **Key:** (stored in `.env.local`)
+#### 4. Anthropic API
+- **Key:** Stored in `.env.local` as `ANTHROPIC_API_KEY`
 - **Model:** Claude 3.5 Sonnet (latest)
 - **Purpose:** Data structuring and content generation
 
-#### 4. OpenAI API
-- **Key:** (stored in `.env.local`)
+#### 5. OpenAI API
+- **Key:** Stored in `.env.local` as `OPENAI_API_KEY`
 - **Model:** GPT-4 Vision
 - **Purpose:** Image quality assessment
 
-#### 5. Supabase
+#### 6. Supabase
 - **URL:** `https://zhsceyvwaikdxajtiydj.supabase.co`
-- **Anon Key:** (stored in `.env.local`)
+- **Anon Key:** (stored in `.env.local` as `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
 - **Storage Bucket:** `places`
 
 ---
@@ -748,14 +1417,16 @@ places/
 
 **Section 3: Process Status Indicators** (shown after Run is clicked)
 - Separator above
-- 7 processing stages with status icons:
-  1. Fetching Place Data
-  2. Uploading Images
-  3. Analysing Images
-  4. Storing Images
-  5. Generating Content
-  6. Mapping Fields
-  7. Uploading to Database
+- 9 processing stages with status icons:
+  1. Apify Fetch (primary Google Places data)
+  2. Firecrawl Fetch (review sites and general data)
+  3. Fetching Menu (menu-specific Firecrawl search)
+  4. Uploading Images (from Apify imageUrls)
+  5. Analysing Images (OpenAI Vision scoring)
+  6. Storing Images (approved images to storage)
+  7. Generating Content (Anthropic AI processing)
+  8. Mapping Fields (cuisines, categories, popular dishes)
+  9. Uploading to Database (final data insertion)
 
 **Status Indicator States:**
 - **Pending:** Grey border circle (14px, 3px border, `#d1d5db`)
@@ -777,36 +1448,59 @@ Each stage displays:
 **Data Sections** (shown when scraping is running):
 
 1. **Basic Information** (numbered badge "1")
+   - Google Place ID
    - Name
-   - Address
+   - Slug (auto-generated from name)
+   - Dogs Allowed (from Apify `additionalInfo.Pets`)
+   - Cuisine (from Apify `categoryName`)
+   - Address (full formatted address)
    - Phone
-   - Website
-   - Price Range
+   - Latitude
+   - Longitude
+   - Coordinates (formatted as "lat, lng")
+   - Neighborhood
+   - Price Range (from Apify `price`)
+   - Website (clickable link)
+   - Instagram
+   - Facebook
+   - Menu (clickable link from Apify `menu`)
 
-2. **Cuisine & Categories** (numbered badge "2")
-   - Cuisine
-   - Category
-   - Meals
+2. **Photos** (numbered badge "2")
+   - 4 placeholder image squares (future: populated from Apify `imageUrls`)
 
-3. **Hours & Reservations** (numbered badge "3")
-   - Open Hours
-   - Reservations
-
-4. **Ratings & Reviews** (numbered badge "4")
-   - Google Rating
+3. **Ratings** (numbered badge "3")
+   - Google (from Apify `totalScore` and `reviewsCount`)
    - TripAdvisor
-   - Overall Score
+   - OpenTable
+   - The Fork
 
-5. **Features & Amenities** (numbered badge "5")
-   - Dog Friendly
-   - Outdoor Seating
-   - WiFi
-   - Other features
+4. **Operational Info** (numbered badge "4")
+   - Hours (all 7 days from Apify `openingHours`)
+   - Reservations Required (from Apify `additionalInfo.Planning`)
+   - Dress Code
 
-6. **Awards** (numbered badge "6")
-   - Michelin
+5. **Busy Periods** (numbered badge "5") ⭐ **NEW SECTION**
+   - Busiest (calculated from Apify `popularTimesHistogram` - highest occupancy %)
+   - Quietest (calculated from Apify `popularTimesHistogram` - lowest occupancy %)
+   - **Algorithm:**
+     - Iterate through all days and hours in histogram
+     - Find maximum occupancy percentage (busiest time)
+     - Find minimum occupancy percentage (quietest time)
+     - Format as "Day at Time" (e.g., "Sunday at 3 PM")
+
+6. **Features** (numbered badge "6")
+   - Placeholder for extracted features
+   - Future: Dog amenities, outdoor seating, WiFi, etc.
+
+7. **Restaurant Meals** (numbered badge "7")
+   - Placeholder for meal types (breakfast, lunch, dinner, etc.)
+
+8. **Accessibility Features** (numbered badge "8")
+   - Placeholder for accessibility information
+
+9. **Awards & Recognition** (numbered badge "9")
    - AA Rosettes
-   - Other awards
+   - Michelin Stars
 
 **Data Display Format:**
 - Each field: Left-justified label (grey text) | Right-justified value (bold text)
@@ -895,24 +1589,48 @@ Each restaurant page must include:
   - Consider materialized views for complex filtered listings
 
 ### API Rate Limiting
-- **Firecrawl:** Check plan limits, implement retry logic
+- **Apify:** Monitor compute units and concurrent runs (varies by plan), implement retry logic for failed runs
+- **Firecrawl:** Check plan limits, implement retry logic (reduced usage as secondary source)
 - **Anthropic:** Monitor token usage, batch requests where possible
 - **OpenAI Vision:** Limit to 15 images max per restaurant
-- **Google Places:** Cache autocomplete results
+- **Google Places:** Cache autocomplete results, minimize API calls
 
 ### Cost Management
 **Per Restaurant Estimates:**
-- Firecrawl: $0.10-0.50 (depending on pages crawled)
-- Anthropic: $0.05-0.20 (token usage)
+- Apify: $0.01-0.05 (per run, depending on plan and compute units)
+- Firecrawl: $0.27-0.30 (9-10 scrapes @ ~$0.03/credit)
+  - Social media searches: 3 credits
+  - Review sites: 2 credits
+  - Awards: 2 credits
+  - Homepage: 1 credit
+  - Menu: 1-2 credits (hybrid approach)
+- Anthropic: $0.05-0.20 (token usage for content generation)
 - OpenAI Vision: $0.10-0.30 (15 images @ ~$0.02 each)
-- **Total: ~$0.25-1.00 per restaurant**
+- **Total: ~$0.43-0.85 per restaurant**
 
-At 1,000 restaurants: $250-1,000 total processing cost.
+At 1,000 restaurants: $430-850 total processing cost.
+
+**Cost Savings with Current Architecture:**
+- Apify replaces multiple Firecrawl calls (Google Maps, Google Business Profile)
+- Google Search scraping via Firecrawl more reliable than direct site scraping
+- Parallel execution reduces total time and improves efficiency
+- Raw markdown storage eliminates need to re-scrape for reprocessing
+- PDF menu extraction (1 credit) vs. multiple page scrapes
+
+**Firecrawl v2 Cost Optimization:**
+- Single `firecrawl_output` JSONB column stores all raw data
+- No need to re-scrape if Anthropic processing changes
+- Hybrid menu approach minimizes failed scrapes
+- Parallel execution of all scrapes (8-10 simultaneous requests)
+- Google Search scraping: Higher success rate than direct URLs
 
 **Optimization Strategies:**
 - Batch process during off-peak hours
 - Implement smart re-scraping (only when data likely changed)
 - Cache AI-generated content (don't regenerate unnecessarily)
+- Monitor Apify compute unit usage and adjust actor configuration
+- Use Apify's dataset storage efficiently (delete old datasets)
+- Store raw Firecrawl markdown for audit trail and reprocessing
 
 ---
 
@@ -969,8 +1687,9 @@ At 1,000 restaurants: $250-1,000 total processing cost.
 - **Database:** Supabase (PostgreSQL with PostGIS)
 - **Storage:** Supabase Storage
 - **APIs:**
-  - Google Places API (location data)
-  - Firecrawl v2 (web scraping)
+  - **Apify API** (primary data source - Google Places scraping with popular times)
+  - Google Places API (autocomplete for admin interface)
+  - Firecrawl v2 (secondary web scraping - review sites, delivery platforms)
   - Anthropic Claude (data processing & content generation)
   - OpenAI GPT-4 Vision (image quality control)
 - **Hosting:** Vercel (Next.js default)
