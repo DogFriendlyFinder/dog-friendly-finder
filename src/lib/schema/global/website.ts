@@ -20,7 +20,7 @@ export function generateWebSiteSchema(): WebSiteSchema {
     "name": "Dog Friendly Finder",
     "alternateName": "DogFriendlyFinder",
     "url": baseUrl,
-    "description": "Discover the UK's best dog-friendly restaurants, hotels, and attractions with verified information on facilities, restrictions, and amenities for dogs",
+    "description": "Discover verified dog-friendly restaurants, hotels, and attractions across the UK. Detailed information on facilities, restrictions, and amenities for your four-legged friend.",
 
     // SEO Keywords (helps with topic relevance)
     "keywords": [

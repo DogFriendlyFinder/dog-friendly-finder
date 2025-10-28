@@ -19,7 +19,7 @@ export function generateOrganizationSchema(): OrganizationSchema {
     "name": "Dog Friendly Finder",
     "legalName": "Dog Friendly Finder Ltd",
     "url": baseUrl,
-    "description": "The UK's leading guide to dog-friendly restaurants, hotels, and attractions. Discover verified dog-friendly venues with detailed information on facilities, restrictions, and amenities for your four-legged friend. From Michelin-starred restaurants to cosy country pubs, find the perfect dog-friendly experience across the United Kingdom.",
+    "description": "Discover verified dog-friendly restaurants, hotels, and attractions across the UK. Detailed information on facilities, restrictions, and amenities for your four-legged friend.",
 
     // Founding & Identity
     "foundingDate": "2025",
