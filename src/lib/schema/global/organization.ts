@@ -53,25 +53,11 @@ export function generateOrganizationSchema(): OrganizationSchema {
       "availableLanguage": "English"
     },
 
-    // Founder
-    "founder": {
-      "@type": "Person",
-      "name": "James Goodman",
-      "jobTitle": "Founder"
-    },
-
     // Service Area
     "areaServed": {
       "@type": "Country",
       "name": "United Kingdom",
       "@id": "https://en.wikipedia.org/wiki/United_Kingdom"
-    },
-
-    // Language
-    "inLanguage": {
-      "@type": "Language",
-      "name": "English",
-      "alternateName": "en-GB"
     },
 
     // Address

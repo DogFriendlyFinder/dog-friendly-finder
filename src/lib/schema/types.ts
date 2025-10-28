@@ -139,9 +139,7 @@ export interface OrganizationSchema extends SchemaContext {
   foundingLocation?: Place
   knowsAbout?: string[]
   contactPoint?: ContactPoint
-  founder?: Person
   areaServed?: Country
-  inLanguage?: Language
   address?: PostalAddress
   sameAs?: string[]
   logo?: ImageObject
