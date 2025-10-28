@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js"
 import { notFound } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
+import type { Metadata } from "next"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
@@ -175,6 +176,57 @@ function SocialIcon({ icon }: { icon: string }) {
       return <Music className="w-5 h-5" />
     default:
       return <ExternalLink className="w-5 h-5" />
+  }
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const restaurant = await getRestaurant(slug)
+
+  if (!restaurant) {
+    return {}
+  }
+
+  const sortedPhotos = restaurant.photos?.sort((a, b) => (a.display_order || 0) - (b.display_order || 0)) || []
+  const primaryImage = sortedPhotos[0]?.url || sortedPhotos[0]?.public_url
+  const cuisines = restaurant.restaurant_cuisine_links?.map(link => link.restaurant_cuisines.name).join(', ') || 'Restaurant'
+
+  const title = `${restaurant.name} | Dog Friendly Finder`
+  const description = restaurant.about || `Dog-friendly ${cuisines} restaurant in ${restaurant.city}. ${restaurant.price_range || ''} ${restaurant.reservations_required ? 'Reservations required.' : 'Reservations available.'}`
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `/places-to-eat/restaurants/${slug}`,
+    },
+    openGraph: {
+      title,
+      description,
+      url: `/places-to-eat/restaurants/${slug}`,
+      siteName: 'Dog Friendly Finder',
+      locale: 'en_GB',
+      type: 'restaurant',
+      images: primaryImage ? [
+        {
+          url: primaryImage,
+          width: 1200,
+          height: 630,
+          alt: restaurant.name,
+        }
+      ] : [],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      site: '@DogFriendlyFind',
+      images: primaryImage ? [primaryImage] : [],
+    },
   }
 }
 

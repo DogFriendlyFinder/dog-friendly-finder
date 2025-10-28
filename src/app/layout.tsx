@@ -16,9 +16,27 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.dogfriendlyfinder.com'),
   title: "Dog Friendly Finder | UK's Best Dog-Friendly Restaurants, Hotels & Attractions",
   description: "Discover verified dog-friendly restaurants, hotels, and attractions across the UK. Detailed information on facilities, restrictions, and amenities for your four-legged friend.",
   keywords: "dog friendly restaurants UK, dog friendly hotels UK, dog friendly places, restaurants that allow dogs, pet friendly dining",
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    title: "Dog Friendly Finder | UK's Best Dog-Friendly Restaurants, Hotels & Attractions",
+    description: "Discover verified dog-friendly restaurants, hotels, and attractions across the UK. Detailed information on facilities, restrictions, and amenities for your four-legged friend.",
+    url: 'https://www.dogfriendlyfinder.com',
+    siteName: 'Dog Friendly Finder',
+    locale: 'en_GB',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: "Dog Friendly Finder | UK's Best Dog-Friendly Restaurants, Hotels & Attractions",
+    description: "Discover verified dog-friendly restaurants, hotels, and attractions across the UK.",
+    site: '@DogFriendlyFind',
+  },
 };
 
 export default function RootLayout({
