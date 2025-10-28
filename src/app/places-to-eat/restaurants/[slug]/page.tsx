@@ -210,7 +210,7 @@ export async function generateMetadata({
       url: `/places-to-eat/restaurants/${slug}`,
       siteName: 'Dog Friendly Finder',
       locale: 'en_GB',
-      type: 'restaurant',
+      type: 'website',
       images: primaryImage ? [
         {
           url: primaryImage,
