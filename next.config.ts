@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   images: {
-    domains: ['koqqkpitepqwlfjymcje.supabase.co'],
+    domains: ['zhsceyvwaikdxajtiydj.supabase.co'],
   },
   experimental: {
     optimizePackageImports: ['lucide-react', '@tabler/icons-react'],

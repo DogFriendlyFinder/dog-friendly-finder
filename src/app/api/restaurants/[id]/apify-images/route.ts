@@ -21,7 +21,7 @@ export async function POST(
     // Get restaurant data
     const { data: restaurant, error } = await supabase
       .from('restaurants')
-      .select('id, name, slug, address, city, neighborhood, website, apify_output')
+      .select('id, name, slug, address, city, website, apify_output')
       .eq('id', params.id)
       .single()
 

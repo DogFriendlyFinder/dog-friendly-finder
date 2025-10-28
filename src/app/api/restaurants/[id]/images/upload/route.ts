@@ -48,11 +48,12 @@ export async function POST(
     console.log('\n--- STEP 1: FETCHING RESTAURANT DATA ---')
     const { data: restaurant, error: restaurantError } = await supabase
       .from('restaurants')
-      .select('id, name, slug, address, city, neighborhood, website, apify_output')
+      .select('id, name, slug, address, city, website, apify_output, neighbourhood_id')
       .eq('id', restaurantId)
       .single()
 
     if (restaurantError || !restaurant) {
+      console.error('Restaurant query error:', restaurantError)
       return NextResponse.json(
         { error: 'Restaurant not found' },
         { status: 404 }
@@ -62,42 +63,24 @@ export async function POST(
     console.log('Restaurant:', restaurant.name)
     console.log('Slug:', restaurant.slug)
     console.log('City:', restaurant.city)
-    console.log('Neighborhood (before):', restaurant.neighborhood)
+    console.log('Neighbourhood ID:', restaurant.neighbourhood_id)
 
-    // Extract neighborhood from apify_output if missing
-    let neighborhood = restaurant.neighborhood
+    // Get neighbourhood name if neighbourhood_id exists
+    let neighborhood = restaurant.city // default fallback
 
-    if (!neighborhood && restaurant.apify_output) {
-      console.log('\n--- EXTRACTING NEIGHBORHOOD FROM APIFY DATA ---')
-      const apifyData = restaurant.apify_output as any
+    if (restaurant.neighbourhood_id) {
+      const { data: neighbourhoodData } = await supabase
+        .from('neighbourhoods')
+        .select('name')
+        .eq('id', restaurant.neighbourhood_id)
+        .single()
 
-      neighborhood =
-        apifyData.neighborhood ||
-        apifyData.sublocality ||
-        apifyData.location?.neighborhood ||
-        apifyData.addressComponents?.find((c: any) => c.types?.includes('sublocality'))?.longText ||
-        apifyData.addressComponents?.find((c: any) => c.types?.includes('neighborhood'))?.longText ||
-        null
-
-      console.log('Extracted neighborhood:', neighborhood)
-
-      // Update restaurant with extracted neighborhood
-      if (neighborhood) {
-        const { error: updateError } = await supabase
-          .from('restaurants')
-          .update({ neighborhood })
-          .eq('id', restaurantId)
-
-        if (!updateError) {
-          console.log('✓ Updated restaurant with neighborhood:', neighborhood)
-        }
+      if (neighbourhoodData) {
+        neighborhood = neighbourhoodData.name
       }
     }
 
-    if (!neighborhood) {
-      console.warn('⚠️  Warning: No neighborhood found, using city as fallback')
-      neighborhood = restaurant.city
-    }
+    console.log('Neighbourhood:', neighborhood)
 
     // Prepare location strings
     // Avoid duplication if neighborhood equals city
@@ -433,7 +416,7 @@ Return ONLY valid JSON with this structure:
 }`
 
   const message = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-sonnet-4-20250514',
     max_tokens: 1024,
     messages: [{
       role: 'user',

@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import Anthropic from "@anthropic-ai/sdk"
 
 const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY!
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!
+
+const anthropic = new Anthropic({
+  apiKey: ANTHROPIC_API_KEY,
+})
 
 // Helper function to parse menu sections from markdown/html
 function parseMenuSections(markdown: string, html: string) {
@@ -234,6 +240,95 @@ function parseMenuSections(markdown: string, html: string) {
   return filteredSections
 }
 
+// AI-powered menu extraction using Anthropic Claude
+async function extractMenuWithAI(markdown: string, restaurantName: string, sourceUrl: string) {
+  console.log('\n=== AI MENU EXTRACTION ===')
+  console.log(`Restaurant: ${restaurantName}`)
+  console.log(`Source: ${sourceUrl}`)
+  console.log(`Content length: ${markdown.length} characters`)
+
+  try {
+    const prompt = `You are a menu extraction specialist. Analyze the following web content and extract the restaurant menu in structured format.
+
+Restaurant: ${restaurantName}
+Source URL: ${sourceUrl}
+
+IMPORTANT INSTRUCTIONS:
+1. Extract ONLY factual menu items with their prices
+2. Organize items into logical sections (Starters, Mains, Desserts, Drinks, etc.)
+3. Include item descriptions if available
+4. Convert all prices to decimal numbers (e.g., "£15" becomes 15.00, "$22.50" becomes 22.50)
+5. If no menu is found, return an empty sections array
+6. Ignore navigation elements, footers, headers, and promotional text
+7. Focus on actual food/drink items with prices
+
+Web Content:
+${markdown.slice(0, 50000)}
+
+Return your response as valid JSON in this exact format:
+{
+  "sections": [
+    {
+      "name": "Section Name",
+      "description": "Optional section description",
+      "items": [
+        {
+          "name": "Item Name",
+          "description": "Item description",
+          "price": 15.00
+        }
+      ]
+    }
+  ]
+}
+
+If no menu items are found, return: {"sections": []}`
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4096,
+      messages: [{
+        role: "user",
+        content: prompt
+      }]
+    })
+
+    // Extract the text content from the response
+    const textContent = message.content.find((block: any) => block.type === 'text') as any
+    if (!textContent || !textContent.text) {
+      console.error('No text content in AI response')
+      return { sections: [] }
+    }
+
+    let responseText = textContent.text as string
+
+    // Clean up the response - remove markdown code blocks if present
+    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+
+    // Parse the JSON response
+    const menuData = JSON.parse(responseText)
+
+    const totalSections = menuData.sections?.length || 0
+    const totalItems = menuData.sections?.reduce((sum: number, section: any) => sum + (section.items?.length || 0), 0) || 0
+
+    console.log(`✓ AI extraction complete`)
+    console.log(`  Sections found: ${totalSections}`)
+    console.log(`  Total items: ${totalItems}`)
+
+    if (totalSections > 0) {
+      menuData.sections.forEach((section: any, idx: number) => {
+        console.log(`  ${idx + 1}. ${section.name}: ${section.items?.length || 0} items`)
+      })
+    }
+
+    return menuData
+
+  } catch (error) {
+    console.error('AI menu extraction error:', error)
+    return { sections: [], error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
@@ -406,8 +501,8 @@ export async function POST(
 
     console.log(`Completed ${scrapeResults.length} scrapes`)
 
-    // Menu scraping with intelligent discovery
-    console.log('=== MENU SCRAPING ===')
+    // Menu scraping with intelligent discovery using Firecrawl v2
+    console.log('=== MENU SCRAPING (Firecrawl v2) ===')
     let menuData: any = {
       scraped_at: new Date().toISOString(),
       menu_url: null,
@@ -416,9 +511,60 @@ export async function POST(
       scrape_method: null
     }
 
-    // Function to scrape menu with structured extraction
+    // Function to search for menu URLs using Firecrawl v2 search
+    async function searchWithFirecrawlV2(query: string, label: string) {
+      console.log(`Searching with Firecrawl v2 (${label}): "${query}"`)
+
+      try {
+        const response = await fetch('https://api.firecrawl.dev/v2/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
+          },
+          body: JSON.stringify({
+            query,
+            limit: 3
+          })
+        })
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error(`Firecrawl v2 search failed for ${label}:`, errorText)
+          return {
+            success: false,
+            error: errorText,
+            results: []
+          }
+        }
+
+        const data = await response.json()
+        const results = data.data?.web || []
+
+        console.log(`✓ Firecrawl v2 search returned ${results.length} results`)
+        results.forEach((result: any, idx: number) => {
+          console.log(`  ${idx + 1}. ${result.title}`)
+          console.log(`     ${result.url}`)
+        })
+
+        return {
+          success: true,
+          results,
+          creditsUsed: data.creditsUsed || 0
+        }
+      } catch (error) {
+        console.error(`Error with Firecrawl v2 search for ${label}:`, error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          results: []
+        }
+      }
+    }
+
+    // Function to scrape menu with structured extraction (v1 scrape endpoint)
     async function scrapeMenuWithStructure(url: string, label: string) {
-      console.log(`Scraping structured menu from ${label}:`, url)
+      console.log(`Scraping menu content from ${label}:`, url)
 
       try {
         const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
@@ -511,44 +657,57 @@ export async function POST(
 
     let menuFound = false
 
-    // STRATEGY 1: Google Search for "{restaurant} {location} menu"
-    console.log('\n--- STRATEGY 1: Google Search ---')
-    const menuSearchQuery = `${baseQuery} menu`
-    const menuSearchUrl = `https://www.google.com/search?q=${encodeURIComponent(menuSearchQuery)}`
-    console.log(`Searching Google: "${menuSearchQuery}"`)
+    // STRATEGY 1: Firecrawl v2 Search (Dubai tutorial approach)
+    console.log('\n--- STRATEGY 1: Firecrawl v2 Search ---')
 
-    const menuSearchResult = await scrapeWithFirecrawl(menuSearchUrl, 'Google Menu Search')
+    // Define search query variations (based on Dubai tutorial + delivery platforms)
+    const searchQueries = [
+      // Official website menu
+      `${restaurant_name} ${location} menu`,
+      `${restaurant_name} ${location} food menu`,
+      `${restaurant_name} ${location} lunch dinner menu`,
+      `${restaurant_name} menu`,
+      // Delivery platforms (guaranteed to have menus)
+      `${restaurant_name} ${location} deliveroo`,
+      `${restaurant_name} ${location} ubereats`,
+      `${restaurant_name} ${location} just eat`,
+      `${restaurant_name} deliveroo menu`,
+      `${restaurant_name} ubereats menu`,
+      `${restaurant_name} just eat menu`
+    ]
 
-    if (menuSearchResult.success && menuSearchResult.markdown) {
-      // Extract the first real link (not Google domain)
-      const links = extractMenuLinks(menuSearchResult.markdown, 'https://google.com')
-      const menuCandidates = links.filter(link =>
-        !link.includes('google.com') &&
-        !link.includes('maps.google') &&
-        !link.includes('accounts.google')
-      ).slice(0, 3) // Try top 3 results
+    for (const searchQuery of searchQueries) {
+      if (menuFound) break
 
-      console.log(`Found ${menuCandidates.length} menu candidates from Google search`)
+      const searchResult = await searchWithFirecrawlV2(searchQuery, 'Menu Search')
 
-      for (const candidateUrl of menuCandidates) {
-        console.log(`Trying Google result: ${candidateUrl}`)
-        const candidateResult = await scrapeMenuWithStructure(candidateUrl, 'Google Result')
+      if (searchResult.success && searchResult.results.length > 0) {
+        console.log(`Found ${searchResult.results.length} potential menu URLs`)
 
-        if (candidateResult.success && candidateResult.markdown) {
-          const parsedMenus = parseMenuSections(candidateResult.markdown, candidateResult.html)
-          const totalItems = parsedMenus.reduce((sum, s) => sum + s.items.length, 0)
-          console.log(`Parsed ${parsedMenus.length} sections with ${totalItems} items`)
+        // Try each URL from search results
+        for (const result of searchResult.results) {
+          if (menuFound) break
 
-          if (totalItems > 0) {
-            console.log(`✓ Successfully found menu via Google search at ${candidateUrl}`)
-            menuData.menu_url = candidateUrl
-            menuData.raw_markdown = candidateResult.markdown
-            menuData.raw_html = candidateResult.html
-            menuData.scrape_method = 'google_search'
-            menuData.metadata = candidateResult.metadata
-            menuData.menus = parsedMenus
-            menuFound = true
-            break
+          console.log(`Trying: ${result.title}`)
+          const scrapeResult = await scrapeMenuWithStructure(result.url, 'v2 Search Result')
+
+          if (scrapeResult.success && scrapeResult.markdown) {
+            // Use AI to extract menu from scraped content
+            const aiMenuData = await extractMenuWithAI(scrapeResult.markdown, restaurant_name, result.url)
+            const totalItems = aiMenuData.sections?.reduce((sum, s) => sum + (s.items?.length || 0), 0) || 0
+            console.log(`AI extracted ${aiMenuData.sections?.length || 0} sections with ${totalItems} items`)
+
+            if (totalItems > 0) {
+              console.log(`✓ Successfully found menu via Firecrawl v2 search at ${result.url}`)
+              menuData.menu_url = result.url
+              menuData.raw_markdown = scrapeResult.markdown
+              menuData.raw_html = scrapeResult.html
+              menuData.scrape_method = 'firecrawl_v2_search_ai'
+              menuData.metadata = scrapeResult.metadata
+              menuData.menus = aiMenuData.sections
+              menuFound = true
+              break
+            }
           }
         }
       }
@@ -570,18 +729,19 @@ export async function POST(
           const linkResult = await scrapeMenuWithStructure(menuLink, 'Homepage Link')
 
           if (linkResult.success && linkResult.markdown) {
-            const parsedMenus = parseMenuSections(linkResult.markdown, linkResult.html)
-            const totalItems = parsedMenus.reduce((sum, s) => sum + s.items.length, 0)
-            console.log(`Parsed ${parsedMenus.length} sections with ${totalItems} items`)
+            // Use AI to extract menu from scraped content
+            const aiMenuData = await extractMenuWithAI(linkResult.markdown, restaurant_name, menuLink)
+            const totalItems = aiMenuData.sections?.reduce((sum, s) => sum + (s.items?.length || 0), 0) || 0
+            console.log(`AI extracted ${aiMenuData.sections?.length || 0} sections with ${totalItems} items`)
 
             if (totalItems > 0) {
               console.log(`✓ Successfully found menu via homepage link at ${menuLink}`)
               menuData.menu_url = menuLink
               menuData.raw_markdown = linkResult.markdown
               menuData.raw_html = linkResult.html
-              menuData.scrape_method = 'homepage_navigation'
+              menuData.scrape_method = 'homepage_navigation_ai'
               menuData.metadata = linkResult.metadata
-              menuData.menus = parsedMenus
+              menuData.menus = aiMenuData.sections
               menuFound = true
               break
             }
@@ -608,18 +768,19 @@ export async function POST(
         const pathResult = await scrapeMenuWithStructure(menuUrl, `Path - ${path}`)
 
         if (pathResult.success && pathResult.markdown && pathResult.metadata?.statusCode !== 404) {
-          const parsedMenus = parseMenuSections(pathResult.markdown, pathResult.html)
-          const totalItems = parsedMenus.reduce((sum, s) => sum + s.items.length, 0)
-          console.log(`Parsed ${parsedMenus.length} sections with ${totalItems} items`)
+          // Use AI to extract menu from scraped content
+          const aiMenuData = await extractMenuWithAI(pathResult.markdown, restaurant_name, menuUrl)
+          const totalItems = aiMenuData.sections?.reduce((sum, s) => sum + (s.items?.length || 0), 0) || 0
+          console.log(`AI extracted ${aiMenuData.sections?.length || 0} sections with ${totalItems} items`)
 
           if (totalItems > 0) {
             console.log(`✓ Successfully found menu at common path ${menuUrl}`)
             menuData.menu_url = menuUrl
             menuData.raw_markdown = pathResult.markdown
             menuData.raw_html = pathResult.html
-            menuData.scrape_method = 'common_path'
+            menuData.scrape_method = 'common_path_ai'
             menuData.metadata = pathResult.metadata
-            menuData.menus = parsedMenus
+            menuData.menus = aiMenuData.sections
             menuFound = true
             break
           }

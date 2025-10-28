@@ -848,27 +848,65 @@ When "Run" button is clicked:
 
 **Stage 3: Firecrawl Menu Fetch (MENU-SPECIFIC)**
 1. **Hybrid Menu Scraping Strategy** via Firecrawl v2 API
-   - **API Endpoint:** `https://api.firecrawl.dev/v1/scrape` (POST)
-   - **Strategy:** Hybrid approach for maximum reliability
+   - **Primary Strategy:** Use Firecrawl `/v2/search` endpoint for intelligent menu discovery
+   - **Fallback Strategies:** Homepage link extraction and common path guessing
 
-   - **Approach A: Direct Website Menu Scraping (Preferred)**
+   - **Strategy 1: Firecrawl v2 Search (Primary - IMPLEMENTED)**
+     - **API Endpoint:** `https://api.firecrawl.dev/v2/search` (POST)
+     - **Method:** Intelligent search engine that finds relevant menu pages
+     - **Query Patterns (tried sequentially until success):**
+       1. `{restaurant_name} {location} menu`
+       2. `{restaurant_name} {location} food menu`
+       3. `{restaurant_name} {location} lunch dinner menu`
+       4. `{restaurant_name} menu`
+     - **Response Format:**
+       ```json
+       {
+         "success": true,
+         "data": {
+           "web": [
+             {
+               "url": "https://restaurant.com/menu",
+               "title": "Restaurant Name - Menu",
+               "description": "View our menu...",
+               "position": 1
+             }
+           ]
+         },
+         "creditsUsed": 3
+       }
+       ```
+     - **Process:**
+       1. Call `/v2/search` with query
+       2. Get top 3 search results
+       3. Scrape each result URL with `/v1/scrape`
+       4. Parse menu content from markdown
+       5. If menu items found, mark as success
+     - **Advantages:**
+       - Finds actual menu pages (not just homepage)
+       - Discovers third-party menus (TheFork, Deliveroo, etc.)
+       - More reliable than guessing paths
+       - Works even if restaurant doesn't have standard `/menu` path
+     - **Example Success:**
+       - Query: "Ottolenghi Richmond menu"
+       - Found: TheFork menu page, Slerp ordering page, official site
+       - Scrapes all discovered URLs until menu items extracted
+
+   - **Strategy 2: Homepage Link Extraction**
+     - Parse homepage navigation for menu links
+     - Look for links containing keywords: "menu", "food", "eat", "dining", "lunch", "dinner", "brunch"
+     - Extract and scrape discovered menu URLs
+
+   - **Strategy 3: Common Path Fallback**
      - Try common menu paths sequentially:
        - `/menu`
        - `/menus`
        - `/food`
-       - `/our-menu`
+       - `/eat`
+       - `/pages/menu`
+       - `/pages/lunch-menu`
      - Construct URL: `{website}{path}`
      - Success criteria: `markdown.length > 100` AND no error messages
-     - **Advantage:** Gets actual menu with items, descriptions, prices
-     - **Example:** Successfully scraped Gaucho's A La Carte PDF menu
-       - URL: `https://gauchorestaurants.com/menus/`
-       - Result: 5,731 characters with all menu categories and PDFs
-
-   - **Approach B: Google Search Fallback**
-     - Triggered when: Direct paths fail or return insufficient data
-     - Query: `{name} {location} menu`
-     - Scrape Google search results page
-     - Contains: Menu links, popular dishes, pricing hints
 
    - **PDF Menu Scraping:**
      - **Firecrawl v2 supports PDF extraction!**
@@ -931,22 +969,29 @@ When "Run" button is clicked:
 - Delete or archive low-quality images
 - Store selected image URLs in `restaurants.photos` jsonb
 
-**Stage 7: Generating Content with Anthropic** (Future)
+**Stage 7: Generating Content with Anthropic** ✅ **IMPLEMENTED**
 
-**Architecture:** Single API endpoint with live database integration
+**Architecture:** Single API endpoint with live database integration and prompt caching
 
 **API Route:** `POST /api/restaurants/[id]/generate-content`
+
+**Implementation Status:** Fully operational and tested
 
 **Process Flow:**
 
 1. **Fetch Live Reference Data** (not static - always current)
    - Query `restaurant_cuisines` table → array of cuisine names (e.g., ["Japanese", "Italian", ...])
    - Query `restaurant_categories` table → array of category names (e.g., ["Fine Dining", "Casual", ...])
-   - Query `restaurant_features` table → array of feature names (e.g., ["Dog Water Bowls", "Outdoor Seating", ...])
+   - Query `restaurant_features` table → array of feature names (65 pre-seeded features)
    - Query `restaurant_meals` table → array of meal names (e.g., ["Breakfast", "Lunch", "Dinner"])
+   - Query `neighbourhoods` table → array of 150+ London neighbourhood names
 
-2. **Build Dynamic Prompt with Live Data**
-   - Include live reference data lists in prompt
+2. **Build Dynamic Prompt with Live Data + Prompt Caching**
+   - Include live reference data lists in prompt (~157k tokens)
+   - **Prompt caching enabled:** 5-minute TTL ephemeral cache
+   - Cache includes: neighbourhoods list, cuisines list, categories list, features list, instructions
+   - **Cost savings:** 90% reduction after first request (cache reads exempt from rate limits)
+   - **Token usage:** ~157k cached tokens, only ~16 new input tokens per request after cache established
    - Instruction: "Use existing names from lists if applicable, suggest new ones if needed"
    - Ensures AI learns current vocabulary and naming conventions
    - Reduces duplicate creation while allowing flexibility
@@ -955,22 +1000,26 @@ When "Run" button is clicked:
    - `restaurants.apify_output` (complete Google Places data)
    - `restaurants.firecrawl_output` (review sites data)
    - `restaurants.menu_data` (structured menu)
-   - **Live reference lists:** available cuisines, categories, features, meals
+   - **Live reference lists:** available cuisines, categories, features, meals, neighbourhoods
 
-4. **Anthropic Generates:**
+4. **Anthropic Generates (with British English enforcement):**
    - `slug`: Intelligent URL slug (see ANTHROPIC_CONTENT_GENERATION_SPEC.md for rules)
-   - `about`: SEO-optimized description (200-300 words)
+   - `about`: SEO-optimized description (200-300 words, British English)
+   - `phone`: International format with +44 prefix
+   - `price_range`: £, ££, £££, or ££££ (see Price Range Detection below)
    - `best_times_description`: Narrative guide to visiting times
    - `public_review_sentiment`: Review summary
    - `faqs`: 5-10 relevant FAQs
    - `ratings`: Aggregate scores from multiple sources
+   - `social_media_urls`: Instagram, Facebook, Twitter, TikTok URLs
    - Structured `restaurant_menu_items` from `menu_data`
    - **Reference suggestions (as names, not IDs):**
      - `cuisines`: ["Japanese", "Asian Fusion"] (prefer existing names, suggest new if needed)
      - `categories`: ["Fine Dining", "Romantic"]
-     - `features`: ["Dog Water Bowls", "Outdoor Seating"]
+     - `features`: ["Dog Water Bowls", "Outdoor Seating"] (match from 65 pre-seeded features)
      - `meals`: ["Lunch", "Dinner"]
      - `popular_dishes`: ["Tonkotsu Ramen", "Gyoza"]
+     - `neighbourhood`: Match to 150+ London neighbourhoods
 
 5. **Store Raw AI Response** (for audit trail and retry capability)
    - Save complete Anthropic output to database before processing
@@ -998,8 +1047,10 @@ When "Run" button is clicked:
    - Insert relationships in `restaurant_meal_links`
 
    **C. Update Restaurant Content Fields**
-   - Update `slug`, `about`, `best_times_description`, `public_review_sentiment`
+   - Update `slug`, `about`, `phone`, `price_range`, `social_media_urls`
+   - Update `best_times_description`, `public_review_sentiment`
    - Update `faqs`, `ratings`, and other JSONB fields
+   - Link neighbourhood via `neighbourhood_id` FK
 
    **D. Insert Menu Items**
    - Bulk insert parsed menu items into `restaurant_menu_items`
@@ -1014,8 +1065,203 @@ When "Run" button is clicked:
    - Success status
    - Generated content summary
    - List of new cuisines/categories/features created
-   - Token usage and processing time
+   - Matched neighbourhood
+   - Token usage (including cache usage metrics)
+   - Processing time
    - Any warnings or notes for review
+
+---
+
+### Price Range Detection
+
+**Field:** `restaurants.price_range`
+
+**Constraint:** CHECK IN ('£', '££', '£££', '££££')
+
+**Detection Strategy (AI-powered):**
+
+The Anthropic AI analyzes multiple data sources to categorize restaurants into 4 price tiers:
+
+**£ (Budget) - Under £15 per person:**
+- Fast food, casual cafes, takeaway joints
+- Pub meals, basic dining
+- Indicators: "£5-10", "£10-15", "Budget", "Inexpensive" in Apify data
+
+**££ (Moderate) - £15-30 per person:**
+- Casual dining restaurants, gastropubs
+- Mid-range chains, bistros
+- Indicators: "£15-25", "£20-30", "Moderate", "$" in Apify data
+
+**£££ (Upscale) - £30-60 per person:**
+- Fine dining, upscale restaurants
+- Premium gastropubs, high-end bistros
+- Indicators: "£35-50", "£40-60", "Expensive", "$$" in Apify data
+
+**££££ (Luxury) - £60+ per person:**
+- Michelin-starred, luxury fine dining
+- Exclusive high-end establishments
+- Indicators: "£80+", "£100+", "Very Expensive", "$$", Michelin stars
+
+**Decision Logic:**
+1. Parse `apify_output.price` for price ranges or symbols
+2. If `menu_data` exists, analyze average main course prices
+3. Cross-reference with restaurant category (Fine Dining → likely £££ or ££££)
+4. Consider Michelin stars/awards → automatically ££££
+5. If uncertain, default to ££ (moderate)
+
+**Output:** Single string matching EXACTLY one of: "£", "££", "£££", "££££"
+
+---
+
+### Restaurant Features Implementation
+
+**Tables:**
+- `restaurant_features` - Lookup table with 65 pre-seeded features
+- `restaurant_feature_links` - Junction table for many-to-many relationships
+
+**Feature Categories (10 total):**
+1. **dog_amenities** (9 features) - Dog Water Bowls, Dog Menu, Dog Treats, Dog Beds Available, etc.
+2. **outdoor_dining** (8 features) - Beer Garden, Patio, Terrace, Rooftop Seating, etc.
+3. **dietary** (7 features) - Vegan Options, Vegetarian Options, Gluten-Free Options, etc.
+4. **dining_options** (8 features) - Breakfast Served, Brunch Served, Sunday Roast, Tasting Menu, etc.
+5. **atmosphere** (8 features) - Family-Friendly, Romantic Setting, Live Music, etc.
+6. **accessibility** (5 features) - Wheelchair Accessible, Step-Free Entry, Accessible Restroom, etc.
+7. **amenities** (5 features) - Free WiFi, Parking Available, Bar Area, Private Dining Room, etc.
+8. **services** (5 features) - Takeaway Available, Delivery Service, Online Booking, etc.
+9. **payment** (3 features) - Card Payments Accepted, Contactless Payments, Cash Only
+10. **policies** (2 features) - BYO Wine Allowed, No Corkage Fee
+
+**AI Detection Rules:**
+
+The Anthropic AI analyzes multiple data sources to detect applicable features:
+
+1. **Dog Amenities:** Check `apify_output.additionalInfo.Pets` for "Dogs allowed"
+   - If true, add "Dog-Friendly Indoor Seating" at minimum
+   - Check for outdoor seating → add "Dog-Friendly Outdoor Seating"
+   - Look for mentions of water bowls, treats in reviews
+
+2. **Outdoor Seating:** Check `apify_output.additionalInfo.Amenities`
+   - "Outdoor seating" → determine type (Beer Garden, Patio, Terrace)
+   - British pubs with outdoor → likely "Beer Garden"
+   - Restaurants with outdoor → "Patio" or "Terrace"
+
+3. **Dietary:** Check `firecrawl_output` special_diets + `menu_data`
+   - "Vegetarian Friendly" → "Vegetarian Options"
+   - Menu items marked vegetarian/vegan → include those options
+
+4. **Accessibility:** Check `apify_output.additionalInfo.Accessibility`
+   - "Wheelchair accessible entrance" → "Wheelchair Accessible" + "Step-Free Entry"
+
+5. **Payments:** Check `apify_output.additionalInfo.Payments`
+   - "Credit cards" or "Debit cards" → "Card Payments Accepted"
+   - Modern restaurants → likely "Contactless Payments"
+
+**Match-Only Pattern:**
+- Features are **pre-seeded** in database (not created dynamically)
+- AI suggests feature names, backend matches against existing 65 features
+- Unmatched features logged but not created (prevents taxonomy drift)
+- Maximum 15 features per restaurant (prioritize most relevant)
+
+**Backend Processing:**
+```typescript
+// Match features (no creation)
+for (const name of aiSuggestedFeatures) {
+  const existing = await supabase
+    .from('restaurant_features')
+    .select('id, name')
+    .eq('name', name)  // Exact match (case-sensitive)
+    .single()
+
+  if (existing) {
+    featureIds.push(existing.id)
+  } else {
+    notFound.push(name)  // Log for review
+  }
+}
+
+// Create links
+await supabase
+  .from('restaurant_feature_links')
+  .insert(featureIds.map(id => ({
+    restaurant_id: restaurantId,
+    feature_id: id
+  })))
+```
+
+---
+
+### Neighbourhoods System
+
+**Table:** `neighbourhoods`
+
+**Schema:**
+- `id` (uuid) - Primary key
+- `name` (text) - Neighbourhood name (e.g., "Primrose Hill", "Shoreditch")
+- `slug` (text) - URL slug (e.g., "primrose-hill", "shoreditch")
+- `city_id` (uuid) - FK to cities table
+- `created_at` (timestamptz)
+
+**Current State:**
+- 150+ London neighbourhoods pre-seeded
+- Used in slug generation and location context
+- Referenced in restaurants table via `neighbourhood_id` FK
+
+**Match-or-Create Pattern:**
+
+Unlike features (match-only), neighbourhoods can be created dynamically:
+
+1. AI extracts neighbourhood from `apify_output.address` or infers from location
+2. Backend attempts exact match (case-insensitive) against `neighbourhoods` table
+3. If match found → link via `neighbourhood_id`
+4. If NO match → create new neighbourhood entry:
+   ```typescript
+   const newNeighbourhood = await supabase
+     .from('neighbourhoods')
+     .insert({
+       name: normalizedName,
+       slug: generateSlug(normalizedName),
+       city_id: londonCityId
+     })
+     .select()
+     .single()
+
+   await supabase
+     .from('restaurants')
+     .update({ neighbourhood_id: newNeighbourhood.id })
+     .eq('id', restaurantId)
+   ```
+
+**Usage in Slug Generation:**
+- Neighbourhood name included in location slug when needed
+- Examples: "abuelo-camden", "wimpy-borehamwood"
+- See ANTHROPIC_CONTENT_GENERATION_SPEC.md for slug generation rules
+
+---
+
+### British English Enforcement
+
+**Requirement:** All AI-generated content must use British English spelling and terminology.
+
+**Implementation:**
+- Enforced in Anthropic prompt with explicit instruction
+- Examples:
+  - "colour" not "color"
+  - "favourite" not "favorite"
+  - "centre" not "center"
+  - "organised" not "organized"
+  - "neighbourhood" not "neighborhood"
+
+**Scope:**
+- `about` field descriptions
+- `faqs` questions and answers
+- `best_times_description`
+- `public_review_sentiment`
+- Any other AI-generated narrative content
+
+**Validation:**
+- No automated validation currently
+- Manual spot-checks during testing
+- Future: Could implement British English dictionary check
 
 **Stage 8: Final Review & Publish** (Future)
 - Admin reviews all generated content
@@ -1604,11 +1850,26 @@ Each restaurant page must include:
   - Awards: 2 credits
   - Homepage: 1 credit
   - Menu: 1-2 credits (hybrid approach)
-- Anthropic: $0.05-0.20 (token usage for content generation)
+- **Anthropic (with prompt caching):**
+  - **First request:** ~$0.15-0.20 (cache WRITE + input + output)
+    - Cache write: ~157k tokens @ $3.75/MTok = ~$0.59
+    - Input tokens: ~16k @ $3/MTok = ~$0.05
+    - Output tokens: ~1k @ $15/MTok = ~$0.015
+    - **Total first request: ~$0.66**
+  - **Subsequent requests (within 5 min):** ~$0.01-0.02 (cache READ + output)
+    - Cache read: ~157k tokens @ $0.30/MTok = ~$0.047 (90% discount, **doesn't count toward rate limits**)
+    - Input tokens: ~16k @ $3/MTok = ~$0.05
+    - Output tokens: ~1k @ $15/MTok = ~$0.015
+    - **Total cached request: ~$0.11**
+  - **Effective cost with caching:** ~$0.11 per restaurant (after cache established)
 - OpenAI Vision: $0.10-0.30 (15 images @ ~$0.02 each)
-- **Total: ~$0.43-0.85 per restaurant**
+- **Total without Anthropic cache: ~$0.43-0.85 per restaurant**
+- **Total with Anthropic cache (optimal): ~$0.49-0.66 per restaurant**
 
-At 1,000 restaurants: $430-850 total processing cost.
+At 1,000 restaurants:
+- Without caching: $430-850 total
+- With prompt caching: $490-660 total
+- **Cache benefit:** ~$170-190 savings at scale + rate limit exemption for cache reads
 
 **Cost Savings with Current Architecture:**
 - Apify replaces multiple Firecrawl calls (Google Maps, Google Business Profile)

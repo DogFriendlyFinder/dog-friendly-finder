@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     // UK postcode pattern: 1-2 letters, 1-2 digits, optional letter, space, digit, 2 letters
     city = city.replace(/\s+[A-Z]{1,2}\d{1,2}[A-Z]?\s*\d[A-Z]{2}\s*$/i, '').trim()
 
-    // Generate slug from name
-    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    // Generate slug from name (remove apostrophes first to avoid splitting words)
+    const slug = name.replace(/'/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
     console.log('Extracted city:', city)
     console.log('Generated slug:', slug)
