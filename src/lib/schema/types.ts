@@ -126,3 +126,78 @@ export interface FeatureData {
   name: string
   feature_category: string
 }
+
+// Global Schema Types
+
+export interface OrganizationSchema extends SchemaContext {
+  "@type": "Organization"
+  name: string
+  legalName?: string
+  url: string
+  description?: string
+  foundingDate?: string
+  foundingLocation?: Place
+  knowsAbout?: string[]
+  contactPoint?: ContactPoint
+  founder?: Person
+  areaServed?: Country
+  inLanguage?: Language
+  address?: PostalAddress
+  sameAs?: string[]
+  logo?: ImageObject
+}
+
+export interface WebSiteSchema extends SchemaContext {
+  "@type": "WebSite"
+  name: string
+  alternateName?: string
+  url: string
+  description?: string
+  keywords?: string
+  inLanguage?: string
+  publisher?: { "@id": string }
+  potentialAction?: SearchAction
+}
+
+export interface SearchAction {
+  "@type": "SearchAction"
+  target: EntryPoint
+  "query-input": PropertyValueSpecification
+}
+
+export interface PropertyValueSpecification {
+  "@type": "PropertyValueSpecification"
+  valueRequired: boolean
+  valueName: string
+}
+
+export interface ContactPoint {
+  "@type": "ContactPoint"
+  contactType: string
+  email?: string
+  telephone?: string
+  availableLanguage?: string
+}
+
+export interface Person {
+  "@type": "Person"
+  name: string
+  jobTitle?: string
+}
+
+export interface Country {
+  "@type": "Country"
+  name: string
+  "@id"?: string
+}
+
+export interface Language {
+  "@type": "Language"
+  name: string
+  alternateName?: string
+}
+
+export interface Place {
+  "@type": "Place"
+  address: PostalAddress
+}
